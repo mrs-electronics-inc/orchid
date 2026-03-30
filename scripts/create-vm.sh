@@ -32,9 +32,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Derive VM name from repo URL if not provided
+# Derive VM name from repo URL if not provided, prefixed with username
 if [[ -z "${VM_NAME}" ]]; then
-  VM_NAME="$(basename "${REPO_URL}" .git)"
+  VM_NAME="$(whoami)-$(basename "${REPO_URL}" .git)"
 fi
 
 echo "Creating VM '${VM_NAME}' for ${REPO_URL}..."

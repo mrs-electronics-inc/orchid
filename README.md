@@ -22,6 +22,8 @@ Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Each V
 
 ## Prerequisites
 
+Run the following on the **hypervisor host**.
+
 ### Create a shared workspace
 
 ```bash
@@ -47,10 +49,10 @@ This installs host dependencies and downloads the Debian 12 cloud image.
 
 ## Usage
 
-Point orchid at a Git repo URL. It derives the VM name and provisions a VM with Nix ready to go.
+Point orchid at a Git repo URL. It derives the VM name and provisions a VM with Nix ready to go. By default, VM names will be prefixed by the username on the hypervisor. This avoid collisions between different developer's VMs.
 
 ```bash
-# Create a VM (VM name = "specture")
+# Create a VM
 just create-vm https://github.com/specture-system/specture
 
 # Override the VM name
