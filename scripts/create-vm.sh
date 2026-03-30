@@ -47,12 +47,18 @@ qemu-img create -f qcow2 -b "${BASE}" -F qcow2 "${IMAGES}/${VM_NAME}.qcow2" 10G
 cat > "/tmp/${VM_NAME}-user-data" <<EOF
 #cloud-config
 hostname: ${VM_NAME}
+ssh_pwauth: true
 users:
   - name: dev
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
     lock_passwd: false
-    plain_text_passwd: "dev"
+chpasswd:
+  expire: false
+  users:
+    - name: dev
+      password: dev
+      type: text
 packages:
   - git
   - curl
@@ -77,8 +83,18 @@ instance-id: ${VM_NAME}
 local-hostname: ${VM_NAME}
 EOF
 
+cat > "/tmp/${VM_NAME}-network-config" <<EOF
+version: 2
+ethernets:
+  default:
+    match:
+      name: "e*"
+    dhcp4: true
+EOF
+
 # 3. Create seed ISO
-cloud-localds "${IMAGES}/${VM_NAME}-seed.iso" \
+cloud-localds --network-config="/tmp/${VM_NAME}-network-config" \
+  "${IMAGES}/${VM_NAME}-seed.iso" \
   "/tmp/${VM_NAME}-user-data" \
   "/tmp/${VM_NAME}-meta-data"
 
@@ -91,7 +107,7 @@ virt-install \
   --disk "path=${IMAGES}/${VM_NAME}.qcow2,format=qcow2" \
   --disk "path=${IMAGES}/${VM_NAME}-seed.iso,device=cdrom" \
   --os-variant debian12 \
-  --network network=default \
+  --network "network=default,model=virtio" \
   --graphics none \
   --console pty,target_type=serial \
   --noautoconsole \
@@ -100,8 +116,15 @@ virt-install \
 # 5. Wait for IP
 echo "Waiting for VM to get an IP..."
 for i in $(seq 1 30); do
-  IP=$(virsh -c "${CONNECT}" domifaddr "${VM_NAME}" 2>/dev/null | awk '/ipv4/ {split($4,a,"/"); print a[1]}')
+  IP="$(virsh -c "${CONNECT}" domifaddr "${VM_NAME}" 2>/dev/null | awk '/ipv4/ {split($4,a,"/"); print a[1]; exit}')"
+  if [[ -z "${IP}" ]]; then
+    MAC="$(virsh -c "${CONNECT}" domiflist "${VM_NAME}" 2>/dev/null | awk 'NR > 2 && $5 != "-" {print $5; exit}' | tr '[:upper:]' '[:lower:]')"
+    if [[ -n "${MAC}" ]]; then
+      IP="$(virsh -c "${CONNECT}" net-dhcp-leases default 2>/dev/null | awk -v mac="${MAC}" 'tolower($0) ~ mac && /ipv4/ {split($5,a,"/"); print a[1]; exit}')"
+    fi
+  fi
   [[ -n "${IP}" ]] && break
+  echo "  attempt ${i}/30: no IP yet"
   sleep 2
 done
 
