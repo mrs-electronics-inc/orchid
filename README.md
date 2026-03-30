@@ -2,7 +2,7 @@
 
 _Because why not._
 
-Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Each VM clones a repo and provisions Nix so its `flake.nix` can provide the dev environment. VMs are passwordless — access is secured at the hypervisor host level.
+Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Each VM clones a repo and provisions Nix so its `flake.nix` can provide the dev environment. VMs default to a `dev` user with password `dev`.
 
 ## Requirements
 
@@ -17,12 +17,14 @@ Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Each V
 | vCPU     | 1                               |
 | RAM      | 2 GB                            |
 | Disk     | 10 GB (qcow2, thin-provisioned) |
-| Auth     | None (passwordless SSH)         |
+| Auth     | `dev` / `dev`                  |
 | Packages | Nix (installed on first boot)   |
 
 ## Prerequisites
 
 Run the following on the **hypervisor host**.
+
+`orchid` currently creates disks in the system libvirt storage pool at `/var/lib/libvirt/images` and talks to `qemu:///system`, so the setup and VM creation commands below should be run as `root`.
 
 ### Create a shared workspace
 
@@ -43,7 +45,7 @@ Add any future users to the `orchid` group so they can manage VMs in the shared 
 git clone https://github.com/mrs-electronics-inc/orchid.git /srv/orchid
 git config --global --add safe.directory /srv/orchid
 cd /srv/orchid
-just setup
+sudo just setup
 ```
 
 This installs host dependencies and downloads the Debian 12 cloud image.
@@ -54,13 +56,15 @@ Point orchid at a Git repo URL. It derives the VM name and provisions a VM with 
 
 ```bash
 # Create a VM
-just create-vm https://github.com/specture-system/specture
+sudo just create-vm https://github.com/specture-system/specture
 
 # Override the VM name
-just create-vm https://github.com/specture-system/specture --name my-dev
+sudo just create-vm https://github.com/specture-system/specture --name my-dev
 ```
 
 On first boot, cloud-init will install Nix in multi-user daemon mode. The VM is ready for `nix develop` once Nix finishes installing (~2-3 min).
+
+You can log in over the serial console or SSH with username `dev` and password `dev`.
 
 ## Lifecycle Commands
 

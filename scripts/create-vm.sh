@@ -34,7 +34,8 @@ done
 
 # Derive VM name from repo URL if not provided, prefixed with username
 if [[ -z "${VM_NAME}" ]]; then
-  VM_NAME="$(whoami)-$(basename "${REPO_URL}" .git)"
+  VM_OWNER="${SUDO_USER:-$(whoami)}"
+  VM_NAME="${VM_OWNER}-$(basename "${REPO_URL}" .git)"
 fi
 
 echo "Creating VM '${VM_NAME}' for ${REPO_URL}..."
@@ -51,7 +52,7 @@ users:
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
     lock_passwd: false
-    plain_text_passwd: ""
+    plain_text_passwd: "dev"
 packages:
   - git
   - curl
@@ -60,10 +61,8 @@ package_update: true
 write_files:
   - path: /etc/ssh/sshd_config.d/orchid.conf
     content: |
-      PermitEmptyPasswords yes
       PasswordAuthentication yes
 runcmd:
-  - passwd -d dev
   - systemctl restart sshd
   - |
     # Install Nix (multi-user daemon mode)
