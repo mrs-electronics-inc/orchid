@@ -2,7 +2,7 @@
 
 _Because why not._
 
-Lightweight, disposable Debian 12 VMs with Nix for running coding agents against single projects. VMs are passwordless — access is secured at the hypervisor host level.
+Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Each VM clones a repo and provisions Nix so its `flake.nix` can provide the dev environment. VMs are passwordless — access is secured at the hypervisor host level.
 
 ## Requirements
 
@@ -22,18 +22,10 @@ Lightweight, disposable Debian 12 VMs with Nix for running coding agents against
 
 ## Prerequisites
 
-Install dependencies on the hypervisor host (one-time):
+Run once on the hypervisor host to install dependencies and download the base image:
 
 ```bash
-apt install -y virtinst cloud-image-utils genisoimage
-```
-
-Download the Debian 12 generic cloud image (one-time):
-
-```bash
-cd /var/lib/libvirt/images
-wget https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2 \
-  -O debian-12-base.qcow2
+just setup
 ```
 
 ## Usage

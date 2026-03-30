@@ -68,6 +68,9 @@ runcmd:
   - |
     # Install Nix (multi-user daemon mode)
     curl -L https://nixos.org/nix/install | sh -s -- --daemon --yes
+  - |
+    # Clone the repo
+    su - dev -c 'git clone ${REPO_URL} /home/dev/${VM_NAME}'
 EOF
 
 cat > "/tmp/${VM_NAME}-meta-data" <<EOF
