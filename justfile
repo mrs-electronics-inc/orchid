@@ -2,6 +2,9 @@ set dotenv-load
 
 images := "/var/lib/libvirt/images"
 
+default:
+    @just --list
+    
 # Install dependencies and download the Debian 12 cloud image
 setup:
     sudo apt install -y virtinst cloud-image-utils genisoimage
