@@ -23,6 +23,7 @@ EOF
 REPO_URL="$1"
 shift
 
+REPO_NAME="$(basename "${REPO_URL}" .git)"
 VM_NAME=""
 
 while [[ $# -gt 0 ]]; do
@@ -35,7 +36,7 @@ done
 # Derive VM name from repo URL if not provided, prefixed with username
 if [[ -z "${VM_NAME}" ]]; then
   VM_OWNER="${SUDO_USER:-$(whoami)}"
-  VM_NAME="${VM_OWNER}-$(basename "${REPO_URL}" .git)"
+  VM_NAME="${VM_OWNER}-${REPO_NAME}"
 fi
 
 echo "Creating VM '${VM_NAME}' for ${REPO_URL}..."
@@ -48,6 +49,7 @@ cat > "/tmp/${VM_NAME}-user-data" <<EOF
 #cloud-config
 hostname: ${VM_NAME}
 ssh_pwauth: true
+locale: en_US.UTF-8
 users:
   - name: dev
     sudo: ALL=(ALL) NOPASSWD:ALL
@@ -62,8 +64,11 @@ chpasswd:
 packages:
   - git
   - curl
+  - locales
   - xz-utils
 package_update: true
+locale_gen:
+  - en_US.UTF-8 UTF-8
 write_files:
   - path: /etc/ssh/sshd_config.d/orchid.conf
     content: |
@@ -75,7 +80,7 @@ runcmd:
     curl -L https://nixos.org/nix/install | sh -s -- --daemon --yes
   - |
     # Clone the repo
-    su - dev -c 'git clone ${REPO_URL} /home/dev/${VM_NAME}'
+    su - dev -c 'git clone ${REPO_URL} /home/dev/${REPO_NAME}'
 EOF
 
 cat > "/tmp/${VM_NAME}-meta-data" <<EOF
