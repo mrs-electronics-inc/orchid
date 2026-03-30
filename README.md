@@ -2,7 +2,7 @@
 
 _Because why not._
 
-Lightweight, disposable Debian 12 VMs for running coding agents against single projects. Each VM clones a repo and uses its `flake.nix` to provide the dev environment via Nix.
+Lightweight, disposable Debian 12 VMs with Nix for running coding agents against single projects. VMs are passwordless — access is secured at the hypervisor host level.
 
 ## Requirements
 
@@ -11,14 +11,14 @@ Lightweight, disposable Debian 12 VMs for running coding agents against single p
 
 ## VM Spec (per instance)
 
-| Resource | Value                               |
-| -------- | ----------------------------------- |
-| OS       | Debian 12 (cloud image)             |
-| vCPU     | 1                                   |
-| RAM      | 2 GB                                |
-| Disk     | 10 GB (qcow2, thin-provisioned)     |
-| Access   | SSH only (cloud-init key injection) |
-| Packages | Nix (installed on first boot)       |
+| Resource | Value                           |
+| -------- | ------------------------------- |
+| OS       | Debian 12 (cloud image)         |
+| vCPU     | 1                               |
+| RAM      | 2 GB                            |
+| Disk     | 10 GB (qcow2, thin-provisioned) |
+| Auth     | None (passwordless SSH)         |
+| Packages | Nix (installed on first boot)   |
 
 ## Prerequisites
 
@@ -38,24 +38,17 @@ wget https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericclou
 
 ## Usage
 
-Point orchid at a Git repo. It derives the VM name from the repo, clones it, and sets up `nix develop` to activate on SSH login.
+Point orchid at a Git repo URL. It derives the VM name and provisions a VM with Nix ready to go.
 
 ```bash
-# Create a VM from a repo (VM name = "specture")
+# Create a VM (VM name = "specture")
 just create-vm https://github.com/specture-system/specture
 
 # Override the VM name
 just create-vm https://github.com/specture-system/specture --name my-dev
-
-# Use a specific SSH key
-just create-vm https://github.com/specture-system/specture --ssh-key "ssh-ed25519 AAAA..."
 ```
 
-On first boot, cloud-init will:
-
-1. Install Nix (multi-user daemon mode)
-2. Clone the repo to `/home/dev/<vm-name>`
-3. Configure `.bashrc` to auto-enter `nix develop` on SSH login
+On first boot, cloud-init will install Nix in multi-user daemon mode. The VM is ready for `nix develop` once Nix finishes installing (~2-3 min).
 
 ## Lifecycle Commands
 
@@ -73,12 +66,19 @@ rm /var/lib/libvirt/images/<vm-name>.qcow2
 rm /var/lib/libvirt/images/<vm-name>-seed.iso
 ```
 
-## SSH Config
+## SSH Config (on your laptop)
 
-Add a wildcard entry to `~/.ssh/config` to reach any VM through the hypervisor host:
+VMs are on a NAT network only reachable from the hypervisor host. To SSH from your laptop, first find your libvirt subnet on the hypervisor:
+
+```bash
+virsh -c qemu:///system net-dumpxml default | grep 'ip address'
+# Example output: <ip address='192.168.122.1' netmask='255.255.255.0'>
+```
+
+Then add a wildcard entry to `~/.ssh/config` on your laptop using that subnet:
 
 ```
-Host 192.168.122.*
+Host <subnet>.*
     User dev
     ProxyJump <hypervisor-host>
     StrictHostKeyChecking no
@@ -88,7 +88,7 @@ Host 192.168.122.*
 Then connect to any VM by IP:
 
 ```bash
-ssh 192.168.122.x
+ssh <vm-ip>
 ```
 
 ## License
