@@ -60,6 +60,9 @@ sudo just create-vm https://github.com/specture-system/specture
 
 # Override the VM name
 sudo just create-vm https://github.com/specture-system/specture --name my-dev
+
+# Remove a VM and its disk artifacts
+sudo just destroy-vm addison-specture
 ```
 
 On first boot, cloud-init will install Nix in multi-user daemon mode. The VM is ready for `nix develop` once Nix finishes installing (~2-3 min).
@@ -68,18 +71,10 @@ You can log in over the serial console or SSH with username `dev` and password `
 
 ## Lifecycle Commands
 
-```bash
-virsh -c qemu:///system start <vm-name>       # start a stopped VM
-virsh -c qemu:///system shutdown <vm-name>     # graceful shutdown
-virsh -c qemu:///system destroy <vm-name>      # force stop
-virsh -c qemu:///system undefine <vm-name>     # remove VM definition
-```
-
-Clean up disk artifacts after undefine:
+Use orchid to remove the VM definition and disk artifacts together:
 
 ```bash
-rm /var/lib/libvirt/images/<vm-name>.qcow2
-rm /var/lib/libvirt/images/<vm-name>-seed.iso
+sudo just destroy-vm <vm-name>
 ```
 
 ## SSH Config (on your laptop)
