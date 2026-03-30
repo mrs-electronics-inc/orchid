@@ -2,7 +2,7 @@
 
 _Because why not._
 
-Lightweight, disposable Debian 12 VMs for running coding agents against single projects.
+Lightweight, disposable Debian 12 VMs for running coding agents against single projects. Each VM clones a repo and uses its `flake.nix` to provide the dev environment via Nix.
 
 ## Requirements
 
@@ -18,10 +18,11 @@ Lightweight, disposable Debian 12 VMs for running coding agents against single p
 | RAM      | 2 GB                                |
 | Disk     | 10 GB (qcow2, thin-provisioned)     |
 | Access   | SSH only (cloud-init key injection) |
+| Packages | Nix (installed on first boot)       |
 
 ## Prerequisites
 
-Install dependencies (one-time):
+Install dependencies on the hypervisor host (one-time):
 
 ```bash
 apt install -y virtinst cloud-image-utils genisoimage
@@ -37,20 +38,24 @@ wget https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericclou
 
 ## Usage
 
+Point orchid at a Git repo. It derives the VM name from the repo, clones it, and sets up `nix develop` to activate on SSH login.
+
 ```bash
-# Basic VM (auto-detects SSH key from ~/.ssh/)
-just create-vm myproject
+# Create a VM from a repo (VM name = "specture")
+just create-vm https://github.com/specture-system/specture
 
-# With extra packages
-just create-vm specture --packages "golang"
+# Override the VM name
+just create-vm https://github.com/specture-system/specture --name my-dev
 
-# With a specific SSH key
-just create-vm myproject --ssh-key "ssh-ed25519 AAAA..."
+# Use a specific SSH key
+just create-vm https://github.com/specture-system/specture --ssh-key "ssh-ed25519 AAAA..."
 ```
 
-The script creates the VM and waits for it to get a DHCP address, then prints the SSH command.
+On first boot, cloud-init will:
 
-Default packages installed: `git`, `curl`, `build-essential`.
+1. Install Nix (multi-user daemon mode)
+2. Clone the repo to `/home/dev/<vm-name>`
+3. Configure `.bashrc` to auto-enter `nix develop` on SSH login
 
 ## Lifecycle Commands
 

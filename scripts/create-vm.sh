@@ -7,30 +7,38 @@ CONNECT="qemu:///system"
 
 usage() {
   cat >&2 <<EOF
-Usage: $0 <vm-name> [options]
+Usage: $0 <repo-url> [options]
+
+Arguments:
+  repo-url                     Git repository URL (name derived automatically)
 
 Options:
-  --packages "pkg1 pkg2 ..."   Additional packages to install
   --ssh-key "key"              SSH public key (default: auto-detect from ~/.ssh/)
+  --name "vm-name"             Override the VM name (default: repo name)
 EOF
   exit 1
 }
 
 [[ $# -ge 1 ]] || usage
 
-VM_NAME="$1"
+REPO_URL="$1"
 shift
 
-EXTRA_PACKAGES=""
 SSH_KEY=""
+VM_NAME=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --packages) EXTRA_PACKAGES="$2"; shift 2 ;;
-    --ssh-key)  SSH_KEY="$2"; shift 2 ;;
-    *)          echo "Unknown option: $1" >&2; usage ;;
+    --ssh-key) SSH_KEY="$2"; shift 2 ;;
+    --name)    VM_NAME="$2"; shift 2 ;;
+    *)         echo "Unknown option: $1" >&2; usage ;;
   esac
 done
+
+# Derive VM name from repo URL if not provided
+if [[ -z "${VM_NAME}" ]]; then
+  VM_NAME="$(basename "${REPO_URL}" .git)"
+fi
 
 # Auto-detect SSH key if not provided
 if [[ -z "${SSH_KEY}" ]]; then
@@ -43,16 +51,7 @@ if [[ -z "${SSH_KEY}" ]]; then
   [[ -n "${SSH_KEY}" ]] || { echo "No SSH key found. Pass --ssh-key or add one to ~/.ssh/" >&2; exit 1; }
 fi
 
-# Build package list
-PACKAGES="git curl build-essential"
-[[ -n "${EXTRA_PACKAGES}" ]] && PACKAGES="${PACKAGES} ${EXTRA_PACKAGES}"
-
-# Format as YAML list
-PACKAGES_YAML=""
-for pkg in ${PACKAGES}; do
-  PACKAGES_YAML="${PACKAGES_YAML}
-  - ${pkg}"
-done
+echo "Creating VM '${VM_NAME}' for ${REPO_URL}..."
 
 # 1. Create thin-provisioned disk
 qemu-img create -f qcow2 -b "${BASE}" -F qcow2 "${IMAGES}/${VM_NAME}.qcow2" 10G
@@ -67,8 +66,29 @@ users:
     shell: /bin/bash
     ssh_authorized_keys:
       - ${SSH_KEY}
-packages:${PACKAGES_YAML}
+packages:
+  - git
+  - curl
+  - xz-utils
 package_update: true
+runcmd:
+  - |
+    # Install Nix (multi-user) as the dev user
+    su - dev -c 'curl -L https://nixos.org/nix/install | sh -s -- --daemon --yes'
+  - |
+    # Clone the repo and enter nix develop shell on login
+    su - dev -c 'git clone ${REPO_URL} /home/dev/${VM_NAME}'
+    cat >> /home/dev/.bashrc <<'BASHRC'
+
+    # Auto-enter nix develop for the project
+    if [ -f /home/dev/${VM_NAME}/flake.nix ] && [ -z "\$ORCHID_NIX_LOADED" ]; then
+      export ORCHID_NIX_LOADED=1
+      cd /home/dev/${VM_NAME}
+      echo "Entering nix develop for ${VM_NAME}..."
+      exec nix develop
+    fi
+BASHRC
+    chown dev:dev /home/dev/.bashrc
 EOF
 
 cat > "/tmp/${VM_NAME}-meta-data" <<EOF
@@ -108,6 +128,9 @@ if [[ -n "${IP}" ]]; then
   echo ""
   echo "VM '${VM_NAME}' is ready!"
   echo "  ssh dev@${IP}"
+  echo ""
+  echo "Nix and the repo will be set up on first boot (may take a few minutes)."
+  echo "On SSH login, 'nix develop' will activate automatically if a flake.nix exists."
 else
   echo ""
   echo "VM '${VM_NAME}' started but no IP yet. Check manually:"

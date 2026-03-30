@@ -1,5 +1,5 @@
 set dotenv-load
 
-# Create a new VM: just create-vm <name> [--packages "pkg1 pkg2"]
+# Create a new VM from a repo: just create-vm <repo-url> [--name <name>]
 create-vm +args:
     ./scripts/create-vm.sh {{args}}
