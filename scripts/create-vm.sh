@@ -81,8 +81,6 @@ write_files:
       set -euxo pipefail
       exec > >(tee -a /var/log/orchid-bootstrap.log) 2>&1
 
-      repo_dir="/home/dev/${REPO_NAME}"
-
       systemctl restart sshd
       update-locale LANG=C.UTF-8
 
@@ -97,8 +95,8 @@ write_files:
       fi
 
       # Clone the repo for the dev user if it is not already present.
-      if [[ ! -d "${repo_dir}/.git" ]]; then
-        su - dev -c 'git clone ${REPO_URL} "'"${repo_dir}"'"'
+      if [[ ! -d "/home/dev/${REPO_NAME}/.git" ]]; then
+        su - dev -c 'git clone ${REPO_URL} /home/dev/${REPO_NAME}'
       fi
 
       cat > /usr/local/bin/orchid-dev-shell.sh <<'ORCHID_SHELL'
@@ -124,7 +122,7 @@ write_files:
         exec nix develop -c bash --login
       fi
       ORCHID_SHELL
-      sed -i 's|__REPO_DIR__|'"${repo_dir}"'|' /usr/local/bin/orchid-dev-shell.sh
+      sed -i 's|__REPO_DIR__|/home/dev/${REPO_NAME}|' /usr/local/bin/orchid-dev-shell.sh
       chmod 0755 /usr/local/bin/orchid-dev-shell.sh
 
       cat > /home/dev/.bash_profile <<'ORCHID_PROFILE'
