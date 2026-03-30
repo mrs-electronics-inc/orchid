@@ -183,11 +183,11 @@ virt-install \
 # 5. Wait for IP
 echo "Waiting for VM to get an IP..."
 for i in $(seq 1 30); do
-  IP="$(virsh -c "${CONNECT}" domifaddr "${VM_NAME}" 2>/dev/null | awk '/ipv4/ {split($4,a,"/"); print a[1]; exit}')"
+  IP="$(virsh -c "${CONNECT}" domifaddr "${VM_NAME}" 2>/dev/null | awk '/ipv4/ && ip == "" {split($4,a,"/"); ip=a[1]} END {print ip}')"
   if [[ -z "${IP}" ]]; then
-    MAC="$(virsh -c "${CONNECT}" domiflist "${VM_NAME}" 2>/dev/null | awk 'NR > 2 && $5 != "-" {print $5; exit}' | tr '[:upper:]' '[:lower:]')"
+    MAC="$(virsh -c "${CONNECT}" domiflist "${VM_NAME}" 2>/dev/null | awk 'NR > 2 && $5 != "-" && mac == "" {mac=$5} END {print mac}' | tr '[:upper:]' '[:lower:]')"
     if [[ -n "${MAC}" ]]; then
-      IP="$(virsh -c "${CONNECT}" net-dhcp-leases default 2>/dev/null | awk -v mac="${MAC}" 'tolower($0) ~ mac && /ipv4/ {split($5,a,"/"); print a[1]; exit}')"
+      IP="$(virsh -c "${CONNECT}" net-dhcp-leases default 2>/dev/null | awk -v mac="${MAC}" 'tolower($0) ~ mac && /ipv4/ && ip == "" {split($5,a,"/"); ip=a[1]} END {print ip}')"
     fi
   fi
   [[ -n "${IP}" ]] && break
