@@ -49,7 +49,6 @@ cat > "/tmp/${VM_NAME}-user-data" <<EOF
 #cloud-config
 hostname: ${VM_NAME}
 ssh_pwauth: true
-locale: en_US.UTF-8
 users:
   - name: dev
     sudo: ALL=(ALL) NOPASSWD:ALL
@@ -67,20 +66,29 @@ packages:
   - locales
   - xz-utils
 package_update: true
-locale_gen:
-  - en_US.UTF-8 UTF-8
 write_files:
   - path: /etc/ssh/sshd_config.d/orchid.conf
     content: |
       PasswordAuthentication yes
+  - path: /usr/local/bin/orchid-bootstrap.sh
+    permissions: '0755'
+    content: |
+      #!/usr/bin/env bash
+      set -euxo pipefail
+      exec > >(tee -a /var/log/orchid-bootstrap.log) 2>&1
+
+      systemctl restart sshd
+      update-locale LANG=C.UTF-8
+
+      # Install Nix (multi-user daemon mode)
+      curl -L https://nixos.org/nix/install | sh -s -- --daemon --yes
+
+      # Clone the repo for the dev user if it is not already present.
+      if [[ ! -d /home/dev/${REPO_NAME}/.git ]]; then
+        su - dev -c 'git clone ${REPO_URL} /home/dev/${REPO_NAME}'
+      fi
 runcmd:
-  - systemctl restart sshd
-  - |
-    # Install Nix (multi-user daemon mode)
-    curl -L https://nixos.org/nix/install | sh -s -- --daemon --yes
-  - |
-    # Clone the repo
-    su - dev -c 'git clone ${REPO_URL} /home/dev/${REPO_NAME}'
+  - /usr/local/bin/orchid-bootstrap.sh
 EOF
 
 cat > "/tmp/${VM_NAME}-meta-data" <<EOF
