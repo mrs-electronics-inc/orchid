@@ -70,6 +70,7 @@ write_files:
   - path: /etc/ssh/sshd_config.d/orchid.conf
     content: |
       PasswordAuthentication yes
+      AcceptEnv
   - path: /usr/local/bin/orchid-bootstrap.sh
     permissions: '0755'
     content: |
@@ -81,6 +82,7 @@ write_files:
       update-locale LANG=C.UTF-8
 
       # Install Nix (multi-user daemon mode)
+      export HOME=/root
       curl -L https://nixos.org/nix/install | sh -s -- --daemon --yes
 
       # Clone the repo for the dev user if it is not already present.
@@ -142,11 +144,45 @@ for i in $(seq 1 30); do
 done
 
 if [[ -n "${IP}" ]]; then
+  if command -v sshpass >/dev/null 2>&1; then
+    echo "Waiting for SSH to become available..."
+    for i in $(seq 1 60); do
+      if sshpass -p dev ssh \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null \
+        -o ConnectTimeout=5 \
+        dev@"${IP}" true >/dev/null 2>&1; then
+        break
+      fi
+      echo "  attempt ${i}/60: ssh not ready yet"
+      sleep 2
+    done
+
+    echo "Waiting for cloud-init to finish..."
+    if ! sshpass -p dev ssh -tt \
+      -o StrictHostKeyChecking=no \
+      -o UserKnownHostsFile=/dev/null \
+      -o ConnectTimeout=5 \
+      dev@"${IP}" 'sudo cloud-init status --wait && sudo cloud-init status --long'; then
+      echo ""
+      echo "cloud-init reported a failure. Recent bootstrap log:"
+      sshpass -p dev ssh \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null \
+        -o ConnectTimeout=5 \
+        dev@"${IP}" 'sudo tail -n 200 /var/log/orchid-bootstrap.log || sudo tail -n 200 /var/log/cloud-init-output.log || true'
+      exit 1
+    fi
+  else
+    echo "sshpass is not installed on the host, so cloud-init completion was not checked automatically."
+    echo "After connecting, run: sudo cloud-init status --wait"
+  fi
+
   echo ""
   echo "VM '${VM_NAME}' is ready!"
   echo "  ssh dev@${IP}"
   echo ""
-  echo "Nix will be installed on first boot (may take a few minutes)."
+  echo "cloud-init completed."
 else
   echo ""
   echo "VM '${VM_NAME}' started but no IP yet. Check manually:"

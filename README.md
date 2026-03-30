@@ -65,7 +65,7 @@ sudo just create-vm https://github.com/specture-system/specture --name my-dev
 sudo just destroy-vm addison-specture
 ```
 
-On first boot, cloud-init will install Nix in multi-user daemon mode. The VM is ready for `nix develop` once Nix finishes installing (~2-3 min).
+On first boot, cloud-init installs Nix in multi-user daemon mode and clones the target repo. `just create-vm` waits for cloud-init to finish before returning when `sshpass` is available on the hypervisor host.
 
 You can log in over the serial console or SSH with username `dev` and password `dev`.
 

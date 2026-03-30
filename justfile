@@ -7,7 +7,7 @@ default:
     
 # Install dependencies and download the Debian 12 base image
 setup:
-    sudo apt install -y virtinst cloud-image-utils genisoimage
+    sudo apt install -y virtinst cloud-image-utils genisoimage sshpass
     test -f {{images}}/debian-12-base.qcow2 || \
         sudo wget -O {{images}}/debian-12-base.qcow2 \
         https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2
