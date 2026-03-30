@@ -22,11 +22,28 @@ Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Each V
 
 ## Prerequisites
 
-Run once on the hypervisor host to install dependencies and download the base image:
+### Create a shared workspace
 
 ```bash
+sudo groupadd --system orchid
+sudo usermod -aG orchid "$USER"
+sudo mkdir -p /srv/orchid
+sudo chgrp -R orchid /srv/orchid
+sudo chmod -R 2775 /srv/orchid
+newgrp orchid
+```
+
+Add any future users to the `orchid` group so they can manage VMs in the shared workspace.
+
+### Clone and set up
+
+```bash
+git clone https://github.com/mrs-electronics-inc/orchid.git /srv/orchid
+cd /srv/orchid
 just setup
 ```
+
+This installs host dependencies and downloads the Debian 12 cloud image.
 
 ## Usage
 
