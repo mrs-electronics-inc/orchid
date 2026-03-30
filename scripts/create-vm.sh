@@ -81,6 +81,8 @@ write_files:
       set -euxo pipefail
       exec > >(tee -a /var/log/orchid-bootstrap.log) 2>&1
 
+      repo_dir="/home/dev/${REPO_NAME}"
+
       systemctl restart sshd
       update-locale LANG=C.UTF-8
 
@@ -88,10 +90,59 @@ write_files:
       export HOME=/root
       curl -L https://nixos.org/nix/install | sh -s -- --daemon --yes
 
-      # Clone the repo for the dev user if it is not already present.
-      if [[ ! -d /home/dev/${REPO_NAME}/.git ]]; then
-        su - dev -c 'git clone ${REPO_URL} /home/dev/${REPO_NAME}'
+      # Enable the modern Nix CLI for flake-based dev shells.
+      mkdir -p /etc/nix
+      if ! grep -q '^experimental-features = .*flakes' /etc/nix/nix.conf 2>/dev/null; then
+        printf '\nexperimental-features = nix-command flakes\n' >> /etc/nix/nix.conf
       fi
+
+      # Clone the repo for the dev user if it is not already present.
+      if [[ ! -d "${repo_dir}/.git" ]]; then
+        su - dev -c 'git clone ${REPO_URL} "'"${repo_dir}"'"'
+      fi
+
+      cat > /usr/local/bin/orchid-dev-shell.sh <<'ORCHID_SHELL'
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      repo_dir="__REPO_DIR__"
+
+      cd "${repo_dir}"
+      export PATH="${HOME}/.npm-global/bin:${PATH}"
+
+      # Only auto-enter the flake shell for interactive login shells.
+      case $- in
+        *i*) ;;
+        *) return 0 2>/dev/null || exit 0 ;;
+      esac
+
+      if [[ -n "${IN_NIX_SHELL:-}" ]]; then
+        return 0 2>/dev/null || exit 0
+      fi
+
+      if [[ -f flake.nix ]]; then
+        exec nix develop -c bash --login
+      fi
+      ORCHID_SHELL
+      sed -i 's|__REPO_DIR__|'"${repo_dir}"'|' /usr/local/bin/orchid-dev-shell.sh
+      chmod 0755 /usr/local/bin/orchid-dev-shell.sh
+
+      cat > /home/dev/.bash_profile <<'ORCHID_PROFILE'
+      # Source the normal interactive shell config first.
+      if [[ -f ~/.bashrc ]]; then
+        . ~/.bashrc
+      fi
+
+      . /usr/local/bin/orchid-dev-shell.sh
+      ORCHID_PROFILE
+      chown dev:dev /home/dev/.bash_profile
+
+      su - dev -c '
+        export PATH="/nix/var/nix/profiles/default/bin:/home/dev/.npm-global/bin:${PATH}"
+        mkdir -p /home/dev/.npm-global
+        nix profile install nixpkgs#helix nixpkgs#zellij nixpkgs#nodejs
+        NPM_CONFIG_PREFIX=/home/dev/.npm-global npm install -g @mariozechner/pi-coding-agent
+      '
 runcmd:
   - /usr/local/bin/orchid-bootstrap.sh
 EOF
