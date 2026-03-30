@@ -105,16 +105,16 @@ write_files:
 
       repo_dir="__REPO_DIR__"
 
-      cd "${repo_dir}"
-      export PATH="${HOME}/.npm-global/bin:${PATH}"
+      cd "\${repo_dir}"
+      export PATH="\${HOME}/.npm-global/bin:\${PATH}"
 
       # Only auto-enter the flake shell for interactive login shells.
-      case $- in
+      case \$- in
         *i*) ;;
         *) return 0 2>/dev/null || exit 0 ;;
       esac
 
-      if [[ -n "${IN_NIX_SHELL:-}" ]]; then
+      if [[ -n "\${IN_NIX_SHELL:-}" ]]; then
         return 0 2>/dev/null || exit 0
       fi
 
@@ -136,7 +136,7 @@ write_files:
       chown dev:dev /home/dev/.bash_profile
 
       su - dev -c '
-        export PATH="/nix/var/nix/profiles/default/bin:/home/dev/.npm-global/bin:${PATH}"
+        export PATH="/nix/var/nix/profiles/default/bin:/home/dev/.npm-global/bin:\${PATH}"
         mkdir -p /home/dev/.npm-global
         nix profile install nixpkgs#helix nixpkgs#zellij nixpkgs#nodejs
         NPM_CONFIG_PREFIX=/home/dev/.npm-global npm install -g @mariozechner/pi-coding-agent
