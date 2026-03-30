@@ -49,6 +49,7 @@ cat > "/tmp/${VM_NAME}-user-data" <<EOF
 #cloud-config
 hostname: ${VM_NAME}
 ssh_pwauth: true
+locale: false
 users:
   - name: dev
     sudo: ALL=(ALL) NOPASSWD:ALL
@@ -70,7 +71,9 @@ write_files:
   - path: /etc/ssh/sshd_config.d/orchid.conf
     content: |
       PasswordAuthentication yes
-      AcceptEnv
+      # Keep terminal compatibility but avoid forwarding client locale vars
+      # into the VM, which may not have those locales generated.
+      AcceptEnv TERM
   - path: /usr/local/bin/orchid-bootstrap.sh
     permissions: '0755'
     content: |
