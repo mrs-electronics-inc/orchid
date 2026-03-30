@@ -41,6 +41,7 @@ Add any future users to the `orchid` group so they can manage VMs in the shared 
 
 ```bash
 git clone https://github.com/mrs-electronics-inc/orchid.git /srv/orchid
+git config --global --add safe.directory /srv/orchid
 cd /srv/orchid
 just setup
 ```
