@@ -144,6 +144,7 @@ for i in $(seq 1 30); do
 done
 
 if [[ -n "${IP}" ]]; then
+  CLOUD_INIT_VERIFIED=0
   if command -v sshpass >/dev/null 2>&1; then
     echo "Waiting for SSH to become available..."
     for i in $(seq 1 60); do
@@ -173,6 +174,7 @@ if [[ -n "${IP}" ]]; then
         dev@"${IP}" 'sudo tail -n 200 /var/log/orchid-bootstrap.log || sudo tail -n 200 /var/log/cloud-init-output.log || true'
       exit 1
     fi
+    CLOUD_INIT_VERIFIED=1
   else
     echo "sshpass is not installed on the host, so cloud-init completion was not checked automatically."
     echo "After connecting, run: sudo cloud-init status --wait"
@@ -182,7 +184,11 @@ if [[ -n "${IP}" ]]; then
   echo "VM '${VM_NAME}' is ready!"
   echo "  ssh dev@${IP}"
   echo ""
-  echo "cloud-init completed."
+  if [[ "${CLOUD_INIT_VERIFIED}" -eq 1 ]]; then
+    echo "cloud-init completed."
+  else
+    echo "cloud-init completion was not verified."
+  fi
 else
   echo ""
   echo "VM '${VM_NAME}' started but no IP yet. Check manually:"
