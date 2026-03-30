@@ -13,7 +13,7 @@ Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Each V
 
 | Resource | Value                           |
 | -------- | ------------------------------- |
-| OS       | Debian 12 (cloud image)         |
+| OS       | Debian 12 (`generic` qcow2)     |
 | vCPU     | 1                               |
 | RAM      | 2 GB                            |
 | Disk     | 10 GB (qcow2, thin-provisioned) |
@@ -48,7 +48,7 @@ cd /srv/orchid
 sudo just setup
 ```
 
-This installs host dependencies and downloads the Debian 12 cloud image.
+This installs host dependencies and downloads the Debian 12 `generic` base image.
 
 ## Usage
 
