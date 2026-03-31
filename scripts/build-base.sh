@@ -62,6 +62,8 @@ packages:
   - curl
   - locales
   - xz-utils
+  - ripgrep
+  - fd-find
   - zsh
   - direnv
 package_update: true
@@ -95,6 +97,8 @@ write_files:
 
       export PATH="/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:\${PATH}"
       nix profile install nixpkgs#helix nixpkgs#zellij nixpkgs#nodejs nixpkgs#go
+
+      ln -sf /usr/bin/fdfind /usr/local/bin/fd
 
       rm -rf /usr/local/share/oh-my-zsh
       git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git /usr/local/share/oh-my-zsh
