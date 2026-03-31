@@ -1,6 +1,7 @@
 package orchidcli
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -16,6 +17,7 @@ const (
 	defaultIPSleep     = 5 * time.Second
 	defaultSSHAttempts = 20
 	defaultSSHSleep    = 5 * time.Second
+	resolveIPTimeout   = 10 * time.Second
 )
 
 func Run(args []string) int {
@@ -165,9 +167,22 @@ fi
 printf '%%s\n' "$ip"
 `, shellQuote(vmName), shellQuote(vmName))
 
-	cmd := exec.Command("ssh", hypervisor, "sh", "-lc", script)
+	ctx, cancel := context.WithTimeout(context.Background(), resolveIPTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "ssh",
+		"-o", "BatchMode=yes",
+		"-o", "ConnectTimeout=5",
+		"-o", "StrictHostKeyChecking=no",
+		"-o", "UserKnownHostsFile=/dev/null",
+		hypervisor,
+		"sh", "-lc", script,
+	)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return "", fmt.Errorf("querying IP for %s via %s timed out after %s", vmName, hypervisor, resolveIPTimeout)
+		}
 		return "", fmt.Errorf("querying IP for %s via %s failed: %s", vmName, hypervisor, strings.TrimSpace(string(output)))
 	}
 
