@@ -98,6 +98,8 @@ write_files:
         if [[ -d "/home/dev/${REPO_NAME}/.git" ]]; then
           grep -qxF '.envrc' "/home/dev/${REPO_NAME}/.git/info/exclude" || \
             printf '\n.envrc\n' >> "/home/dev/${REPO_NAME}/.git/info/exclude"
+          grep -qxF '.direnv/' "/home/dev/${REPO_NAME}/.git/info/exclude" || \
+            printf '.direnv/\n' >> "/home/dev/${REPO_NAME}/.git/info/exclude"
         fi
       fi
 
