@@ -2,8 +2,9 @@
 set -euo pipefail
 
 IMAGES="/var/lib/libvirt/images"
-BASE="${IMAGES}/debian-12-base.qcow2"
+BASE_LINK="${IMAGES}/orchid-base.qcow2"
 CONNECT="qemu:///system"
+TMP_DIR=""
 
 usage() {
   cat >&2 <<EOF
@@ -19,6 +20,14 @@ EOF
 }
 
 [[ $# -ge 1 ]] || usage
+
+[[ -e "${BASE_LINK}" ]] || {
+  echo "Missing Orchid base image: ${BASE_LINK}" >&2
+  echo "Run: sudo just build-base" >&2
+  exit 1
+}
+
+BASE="$(readlink -f "${BASE_LINK}")"
 
 REPO_URL="$1"
 shift
@@ -41,39 +50,21 @@ fi
 
 echo "Creating VM '${VM_NAME}' for ${REPO_URL}..."
 
+TMP_DIR="$(mktemp -d "/tmp/${VM_NAME}.XXXXXX")"
+cleanup() {
+  rm -rf "${TMP_DIR}"
+}
+trap cleanup EXIT
+
 # 1. Create thin-provisioned disk
-qemu-img create -f qcow2 -b "${BASE}" -F qcow2 "${IMAGES}/${VM_NAME}.qcow2" 10G
+qemu-img create -f qcow2 -b "${BASE}" -F qcow2 "${IMAGES}/${VM_NAME}.qcow2"
 
 # 2. Write cloud-init configs
-cat > "/tmp/${VM_NAME}-user-data" <<EOF
+cat > "${TMP_DIR}/user-data" <<EOF
 #cloud-config
 hostname: ${VM_NAME}
 ssh_pwauth: true
-locale: false
-users:
-  - name: dev
-    sudo: ALL=(ALL) NOPASSWD:ALL
-    shell: /bin/bash
-    lock_passwd: false
-chpasswd:
-  expire: false
-  users:
-    - name: dev
-      password: dev
-      type: text
-packages:
-  - git
-  - curl
-  - locales
-  - xz-utils
-package_update: true
 write_files:
-  - path: /etc/ssh/sshd_config.d/orchid.conf
-    content: |
-      PasswordAuthentication yes
-      # Keep terminal compatibility but avoid forwarding client locale vars
-      # into the VM, which may not have those locales generated.
-      AcceptEnv TERM
   - path: /usr/local/bin/orchid-bootstrap.sh
     permissions: '0755'
     content: |
@@ -82,17 +73,6 @@ write_files:
       exec > >(tee -a /var/log/orchid-bootstrap.log) 2>&1
 
       systemctl restart sshd
-      update-locale LANG=C.UTF-8
-
-      # Install Nix (multi-user daemon mode)
-      export HOME=/root
-      curl -L https://nixos.org/nix/install | sh -s -- --daemon --yes
-
-      # Enable the modern Nix CLI for flake-based dev shells.
-      mkdir -p /etc/nix
-      if ! grep -q '^experimental-features = .*flakes' /etc/nix/nix.conf 2>/dev/null; then
-        printf '\nexperimental-features = nix-command flakes\n' >> /etc/nix/nix.conf
-      fi
 
       # Clone the repo for the dev user if it is not already present.
       if [[ ! -d "/home/dev/${REPO_NAME}/.git" ]]; then
@@ -106,7 +86,7 @@ write_files:
       repo_dir="__REPO_DIR__"
 
       cd "\${repo_dir}"
-      export PATH="\${HOME}/.npm-global/bin:\${PATH}"
+      export PATH="/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:/usr/local/bin:\${PATH}"
 
       # Only auto-enter the flake shell for interactive login shells.
       case \$- in
@@ -134,23 +114,16 @@ write_files:
       . /usr/local/bin/orchid-dev-shell.sh
       ORCHID_PROFILE
       chown dev:dev /home/dev/.bash_profile
-
-      su - dev -c '
-        export PATH="/nix/var/nix/profiles/default/bin:/home/dev/.npm-global/bin:\${PATH}"
-        mkdir -p /home/dev/.npm-global
-        nix profile install nixpkgs#helix nixpkgs#zellij nixpkgs#nodejs
-        NPM_CONFIG_PREFIX=/home/dev/.npm-global npm install -g @mariozechner/pi-coding-agent
-      '
 runcmd:
   - /usr/local/bin/orchid-bootstrap.sh
 EOF
 
-cat > "/tmp/${VM_NAME}-meta-data" <<EOF
+cat > "${TMP_DIR}/meta-data" <<EOF
 instance-id: ${VM_NAME}
 local-hostname: ${VM_NAME}
 EOF
 
-cat > "/tmp/${VM_NAME}-network-config" <<EOF
+cat > "${TMP_DIR}/network-config" <<EOF
 version: 2
 ethernets:
   default:
@@ -160,10 +133,10 @@ ethernets:
 EOF
 
 # 3. Create seed ISO
-cloud-localds --network-config="/tmp/${VM_NAME}-network-config" \
+cloud-localds --network-config="${TMP_DIR}/network-config" \
   "${IMAGES}/${VM_NAME}-seed.iso" \
-  "/tmp/${VM_NAME}-user-data" \
-  "/tmp/${VM_NAME}-meta-data"
+  "${TMP_DIR}/user-data" \
+  "${TMP_DIR}/meta-data"
 
 # 4. Launch VM
 virt-install \

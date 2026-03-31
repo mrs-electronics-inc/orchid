@@ -2,23 +2,29 @@
 
 _Because why not._
 
-Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Each VM clones a repo and provisions Nix so its `flake.nix` can provide the dev environment. VMs default to a `dev` user with password `dev`.
+Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Orchid keeps per-VM disks small by building a shared base image with the common toolchain already installed, then creating thin qcow2 overlays for each repo-specific VM. VMs default to a `dev` user with password `dev`.
 
 ## Requirements
 
 - Linux host with KVM/QEMU and libvirt
 - A `default` libvirt network (NAT) and storage pool
 
-## VM Spec (per instance)
+## Image Layout
 
 | Resource | Value                           |
 | -------- | ------------------------------- |
-| OS       | Debian 12 (`generic` qcow2)     |
-| vCPU     | 1                               |
-| RAM      | 2 GB                            |
-| Disk     | 10 GB (qcow2, thin-provisioned) |
+| Base OS  | Debian 12 (`generic` qcow2)     |
+| Shared base | `orchid-base.qcow2` symlink to the current versioned Orchid base image with Nix, Node.js, Go, PI coding agent, and common operator tools |
+| VM disk  | Thin qcow2 overlay backed by `orchid-base.qcow2` |
 | Auth     | `dev` / `dev`                  |
-| Packages | Nix (installed on first boot)   |
+
+## VM Spec (per instance)
+
+| Resource | Value |
+| -------- | ----- |
+| vCPU     | 1     |
+| RAM      | 2 GB  |
+| Disk     | Thin qcow2 overlay; physical usage grows with repo-specific writes |
 
 ## Prerequisites
 
@@ -46,16 +52,17 @@ git clone https://github.com/mrs-electronics-inc/orchid.git /srv/orchid
 git config --global --add safe.directory /srv/orchid
 cd /srv/orchid
 sudo just setup
+sudo just build-base
 ```
 
-This installs host dependencies and downloads the Debian 12 `generic` base image.
+`just setup` installs host dependencies and downloads the Debian 12 `generic` base image. `just build-base` creates a new versioned Orchid base image and refreshes `orchid-base.qcow2` to point at it.
 
 ## Usage
 
-Point orchid at a Git repo URL. It derives the VM name and provisions a VM with Nix ready to go. By default, VM names will be prefixed by the username on the hypervisor. This avoid collisions between different developer's VMs.
+Point orchid at a Git repo URL. It derives the VM name and provisions a VM from the shared Orchid base image. By default, VM names will be prefixed by the username on the hypervisor. This avoids collisions between different developers' VMs.
 
 ```bash
-# Create a VM
+# Create a VM from the shared Orchid base image
 sudo just create-vm https://github.com/specture-system/specture
 
 # Override the VM name
@@ -65,9 +72,27 @@ sudo just create-vm https://github.com/specture-system/specture --name my-dev
 sudo just destroy-vm addison-specture
 ```
 
-On first boot, cloud-init installs Nix in multi-user daemon mode and clones the target repo. `just create-vm` waits for cloud-init to finish before returning when `sshpass` is available on the hypervisor host.
+On first boot, cloud-init performs only VM-specific setup: setting the hostname, cloning the target repo, and wiring the login shell so interactive sessions auto-enter `nix develop` when the repo has a `flake.nix`. Nix itself and the common toolchain are already present in the shared base image. `just create-vm` waits for cloud-init to finish before returning when `sshpass` is available on the hypervisor host.
 
 You can log in over the serial console or SSH with username `dev` and password `dev`.
+
+## Base Image Workflow
+
+Orchid uses a two-stage image pipeline:
+
+1. `debian-12-base.qcow2`
+   Downloaded from Debian cloud images and kept pristine.
+2. `orchid-base.qcow2`
+   Built once from the Debian base and preloaded with:
+   - Nix with flakes enabled
+   - Node.js
+   - Go
+   - PI coding agent
+   - `git`, `curl`, `helix`, and `zellij`
+3. Per-VM overlay
+   Created for each repo and used only for repo checkout, repo-specific closures, and transient build output.
+
+This keeps common Nix store contents in the shared base layer so dozens of VMs do not each pay to install the same baseline toolchain.
 
 ## Lifecycle Commands
 
@@ -75,6 +100,12 @@ Use orchid to remove the VM definition and disk artifacts together:
 
 ```bash
 sudo just destroy-vm <vm-name>
+```
+
+Rebuild the shared base image after changing the default toolchain:
+
+```bash
+sudo just build-base
 ```
 
 ## SSH Config (on your laptop)
