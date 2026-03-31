@@ -62,8 +62,6 @@ orchid create-vm \
   --identity-file <path-to-identity> \
   --name <vm-name> \
   <repo-url>
-
-sudo just destroy-vm <vm-name>
 ```
 
 On first boot, cloud-init performs only VM-specific setup: setting the hostname, cloning the target repo, installing the authorized key, and dropping a repo-local `.envrc` so `direnv` loads the flake when the checkout has a `flake.nix`.
