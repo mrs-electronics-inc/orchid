@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -13,9 +12,8 @@ import (
 )
 
 const (
-	defaultSSHUser    = "dev"
-	defaultSSHTimeout = 10 * time.Second
-	resolveIPTimeout  = 10 * time.Second
+	defaultSSHUser   = "dev"
+	resolveIPTimeout = 10 * time.Second
 )
 
 func Run(args []string) int {
@@ -63,36 +61,13 @@ func runConnect(args []string) int {
 		return 1
 	}
 
-	if err := waitForSSH(ip); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
 	fmt.Printf("Connecting to %s (%s)\n", vmName, ip)
-	return execSSH(ip, *user, remoteArgs)
+	return execSSH(hypervisor, ip, *user, remoteArgs)
 }
 
 func usage() {
 	fmt.Fprintln(os.Stderr, "usage: orchid connect [--user USER] <vm-name> [-- <ssh-args...>]")
 	os.Exit(2)
-}
-
-func waitForSSH(ip string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultSSHTimeout)
-	defer cancel()
-
-	dialer := &net.Dialer{}
-	for {
-		conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(ip, "22"))
-		if err == nil {
-			_ = conn.Close()
-			return nil
-		}
-		if ctx.Err() == context.DeadlineExceeded {
-			return fmt.Errorf("ssh on %s timed out after %s", ip, defaultSSHTimeout)
-		}
-		time.Sleep(250 * time.Millisecond)
-	}
 }
 
 func resolveIP(hypervisor, vmName string) (string, error) {
@@ -192,10 +167,12 @@ func parseLeaseIP(output, mac string) string {
 	return ""
 }
 
-func execSSH(ip, user string, remoteArgs []string) int {
+func execSSH(hypervisor, ip, user string, remoteArgs []string) int {
 	sshArgs := []string{
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
+		"-o", "ConnectTimeout=10",
+		"-o", fmt.Sprintf("ProxyCommand=ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -W %%h:%%p %s", hypervisor),
 	}
 
 	if len(remoteArgs) == 0 {
