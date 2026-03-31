@@ -65,6 +65,12 @@ orchid connect <vm-name>
 
 Once `hypervisor` and `identity_file` are set in `~/.config/orchid/config.toml`, `orchid connect` does not need flags.
 
+Use `orchid list` to inspect the VMs on the configured hypervisor:
+
+```bash
+orchid list
+```
+
 ## License
 
 [MIT](LICENSE)

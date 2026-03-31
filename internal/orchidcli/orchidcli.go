@@ -26,6 +26,8 @@ func Run(args []string) int {
 		return runConnect(args[1:])
 	case "create-vm":
 		return runCreateVM(args[1:])
+	case "list":
+		return runList(args[1:])
 	case "config":
 		return runConfig(args[1:])
 	case "-h", "--help", "help":
@@ -78,7 +80,7 @@ func runConnect(args []string) int {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, "usage: orchid <command> [args]")
-	fmt.Fprintln(os.Stderr, "commands: connect, create-vm, config")
+	fmt.Fprintln(os.Stderr, "commands: connect, create-vm, list, config")
 	os.Exit(2)
 }
 
