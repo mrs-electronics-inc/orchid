@@ -50,11 +50,9 @@ identity_file = "<path-to-identity>"
 `orchid create-vm` runs on your laptop, talks to the configured hypervisor, derives the VM name, and provisions a VM from the shared Orchid base image. By default, VM names are prefixed by the local username so different developers do not collide.
 
 ```bash
-orchid create-vm --identity-file <path-to-identity> <repo-url>
+orchid create-vm <repo-url>
 
-orchid create-vm \
-  --name <vm-name> \
-  <repo-url>
+orchid create-vm --name <vm-name> <repo-url>
 ```
 
 On first boot, cloud-init performs only VM-specific setup: setting the hostname, cloning the target repo, installing the authorized key, and dropping a repo-local `.envrc` so `direnv` loads the flake when the checkout has a `flake.nix`.
