@@ -192,14 +192,22 @@ func remoteReadlink(hypervisor, path string) (string, error) {
 }
 
 func copyFileToRemote(hypervisor, localPath, remotePath string) error {
-	cmd := exec.Command("scp",
+	cmd := exec.Command("ssh",
 		"-o", "BatchMode=yes",
 		"-o", "ConnectTimeout=5",
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
-		localPath,
-		hypervisor+":"+remotePath,
+		hypervisor,
+		"sh", "-c", "cat > "+shellQuote(remotePath),
 	)
+
+	file, err := os.Open(localPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	cmd.Stdin = file
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -411,4 +419,11 @@ func currentUsername() string {
 		return current.Username
 	}
 	return "dev"
+}
+
+func shellQuote(value string) string {
+	if value == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
