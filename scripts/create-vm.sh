@@ -146,6 +146,7 @@ virt-install \
   --vcpus 1 \
   --disk "path=${IMAGES}/${VM_NAME}.qcow2,format=qcow2" \
   --disk "path=${IMAGES}/${VM_NAME}-seed.iso,device=cdrom" \
+  --security type=none \
   --os-variant debian12 \
   --network "network=default,model=virtio" \
   --graphics none \
