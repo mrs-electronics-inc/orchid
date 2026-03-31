@@ -103,7 +103,7 @@ write_files:
       rm -rf /usr/local/share/oh-my-zsh
       git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git /usr/local/share/oh-my-zsh
 
-      NPM_CONFIG_PREFIX=/usr/local npm install -g @mariozechner/pi-coding-agent
+      NPM_CONFIG_PREFIX=/usr/local npm install -g @mariozechner/pi-coding-agent @openai/codex
 
       usermod -s /usr/bin/zsh dev
 

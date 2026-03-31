@@ -14,7 +14,7 @@ Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Orchid
 | Resource | Value                           |
 | -------- | ------------------------------- |
 | Base OS  | Debian 12 (`generic` qcow2)     |
-| Shared base | `orchid-base.qcow2` symlink to the current versioned Orchid base image with Nix, Node.js, Go, PI coding agent, zsh, direnv, `fd`, `ripgrep`, and common operator tools |
+| Shared base | `orchid-base.qcow2` symlink to the current versioned Orchid base image with Nix, Node.js, Go, PI coding agent, Codex CLI, zsh, direnv, `fd`, `ripgrep`, and common operator tools |
 | VM disk  | Thin qcow2 overlay backed by `orchid-base.qcow2` |
 | Auth     | `dev` / `dev`                  |
 
@@ -107,6 +107,7 @@ Orchid uses a two-stage image pipeline:
    - Node.js
    - Go
    - PI coding agent
+   - Codex CLI
    - zsh with the `robbyrussell` theme
    - `direnv`
    - `git`, `curl`, `helix`, `zellij`, `fd`, and `ripgrep`
