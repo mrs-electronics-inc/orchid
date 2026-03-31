@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -28,8 +29,6 @@ func Run(args []string) int {
 	switch args[0] {
 	case "connect":
 		return runConnect(args[1:])
-	case "ip":
-		return runIP(args[1:])
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -61,7 +60,7 @@ func runConnect(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	ip, err := waitForIP(hypervisor, vmName, defaultIPAttempts, defaultIPSleep)
+	ip, err := resolveIP(hypervisor, vmName)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -76,54 +75,9 @@ func runConnect(args []string) int {
 	return execSSH(ip, *user, remoteArgs)
 }
 
-func runIP(args []string) int {
-	fs := flag.NewFlagSet("ip", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-
-	if fs.NArg() < 1 {
-		fmt.Fprintln(os.Stderr, "usage: orchid ip <vm-name>")
-		return 2
-	}
-
-	hypervisor, err := requireEnv("ORCHID_HYPERVISOR")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	ip, err := resolveIP(hypervisor, fs.Arg(0))
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
-	fmt.Println(ip)
-	return 0
-}
-
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: orchid <connect|ip> [options]")
+	fmt.Fprintln(os.Stderr, "usage: orchid connect [--user USER] <vm-name> [-- <ssh-args...>]")
 	os.Exit(2)
-}
-
-func waitForIP(hypervisor, vmName string, attempts int, sleep time.Duration) (string, error) {
-	var lastErr error
-	for i := 0; i < attempts; i++ {
-		ip, err := resolveIP(hypervisor, vmName)
-		if err == nil && ip != "" {
-			return ip, nil
-		}
-		lastErr = err
-		if i < attempts-1 {
-			time.Sleep(sleep)
-		}
-	}
-	if lastErr != nil {
-		return "", fmt.Errorf("failed to resolve IP for %s: %w", vmName, lastErr)
-	}
-	return "", fmt.Errorf("failed to resolve IP for %s", vmName)
 }
 
 func waitForSSH(ip, user string, attempts int, sleep time.Duration) error {
@@ -152,41 +106,100 @@ func waitForSSH(ip, user string, attempts int, sleep time.Duration) error {
 }
 
 func resolveIP(hypervisor, vmName string) (string, error) {
-	script := fmt.Sprintf(`
-set -e
-ip="$(virsh -c qemu:///system domifaddr %s 2>/dev/null | awk '/ipv4/ && ip == "" {split($4,a,"/"); ip=a[1]} END {print ip}')"
-if [ -z "$ip" ]; then
-  mac="$(virsh -c qemu:///system domiflist %s 2>/dev/null | awk 'NR > 2 && $5 != "-" && mac == "" {mac=$5} END {print mac}' | tr '[:upper:]' '[:lower:]')"
-  if [ -n "$mac" ]; then
-    ip="$(virsh -c qemu:///system net-dhcp-leases default 2>/dev/null | awk -v mac="$mac" 'tolower($0) ~ mac && /ipv4/ && ip == "" {split($5,a,"/"); ip=a[1]} END {print ip}')"
-  fi
-fi
-if [ -z "$ip" ]; then
-  exit 1
-fi
-printf '%%s\n' "$ip"
-`, shellQuote(vmName), shellQuote(vmName))
-
 	ctx, cancel := context.WithTimeout(context.Background(), resolveIPTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "ssh",
+	domifaddr, err := runRemoteCommand(ctx, hypervisor, "virsh", "-c", "qemu:///system", "domifaddr", vmName)
+	if err != nil {
+		return "", err
+	}
+	if ip := parseDomifaddr(domifaddr); ip != "" {
+		return ip, nil
+	}
+
+	domiflist, err := runRemoteCommand(ctx, hypervisor, "virsh", "-c", "qemu:///system", "domiflist", vmName)
+	if err != nil {
+		return "", err
+	}
+	mac := parseMAC(domiflist)
+	if mac == "" {
+		return "", fmt.Errorf("querying IP for %s via %s failed: no MAC address found", vmName, hypervisor)
+	}
+
+	leases, err := runRemoteCommand(ctx, hypervisor, "virsh", "-c", "qemu:///system", "net-dhcp-leases", "default")
+	if err != nil {
+		return "", err
+	}
+	if ip := parseLeaseIP(leases, mac); ip != "" {
+		return ip, nil
+	}
+
+	return "", fmt.Errorf("querying IP for %s via %s failed: lease not found for MAC %s", vmName, hypervisor, mac)
+}
+
+func runRemoteCommand(ctx context.Context, hypervisor string, remoteArgs ...string) (string, error) {
+	args := []string{
 		"-o", "BatchMode=yes",
 		"-o", "ConnectTimeout=5",
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
 		hypervisor,
-		"sh", "-lc", script,
-	)
+	}
+	args = append(args, remoteArgs...)
+
+	cmd := exec.CommandContext(ctx, "ssh", args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return "", fmt.Errorf("querying IP for %s via %s timed out after %s", vmName, hypervisor, resolveIPTimeout)
+			return "", fmt.Errorf("querying IP via %s timed out after %s", hypervisor, resolveIPTimeout)
 		}
-		return "", fmt.Errorf("querying IP for %s via %s failed: %s", vmName, hypervisor, strings.TrimSpace(string(output)))
+		return "", fmt.Errorf("querying IP via %s failed: %s", hypervisor, strings.TrimSpace(string(output)))
 	}
-
 	return strings.TrimSpace(string(output)), nil
+}
+
+func parseDomifaddr(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		if !strings.Contains(line, "ipv4") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 4 {
+			continue
+		}
+		if ip := strings.SplitN(fields[3], "/", 2)[0]; ip != "" {
+			return ip
+		}
+	}
+	return ""
+}
+
+func parseMAC(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 5 {
+			continue
+		}
+		mac := strings.ToLower(strings.TrimSpace(fields[4]))
+		if mac != "-" && mac != "mac" {
+			return mac
+		}
+	}
+	return ""
+}
+
+var leaseIPRe = regexp.MustCompile(`(?i)\b([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/\d+\b`)
+
+func parseLeaseIP(output, mac string) string {
+	for _, line := range strings.Split(output, "\n") {
+		if !strings.Contains(strings.ToLower(line), mac) {
+			continue
+		}
+		if m := leaseIPRe.FindStringSubmatch(line); len(m) == 2 {
+			return m[1]
+		}
+	}
+	return ""
 }
 
 func execSSH(ip, user string, remoteArgs []string) int {
@@ -216,13 +229,6 @@ func execSSH(ip, user string, remoteArgs []string) int {
 	}
 
 	return 0
-}
-
-func shellQuote(s string) string {
-	if s == "" {
-		return "''"
-	}
-	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
 }
 
 func envOr(name, fallback string) string {

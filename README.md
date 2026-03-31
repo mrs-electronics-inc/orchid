@@ -135,20 +135,13 @@ Install with Go:
 go install github.com/mrs-electronics-inc/orchid@latest
 ```
 
-Set `ORCHID_HYPERVISOR` before using either command. Orchid does not ship a default hypervisor host.
+Set `ORCHID_HYPERVISOR` before using `orchid connect`. Orchid does not ship a default hypervisor host.
 
 Connect to a VM by name:
 
 ```bash
 ORCHID_HYPERVISOR=<hypervisor-host> \
 orchid connect addison-specture
-```
-
-Print the current VM IP:
-
-```bash
-ORCHID_HYPERVISOR=<hypervisor-host> \
-orchid ip addison-specture
 ```
 
 ## License
