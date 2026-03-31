@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -63,7 +63,7 @@ func runConnect(args []string) int {
 		return 1
 	}
 
-	if err := waitForSSH(ip, *user); err != nil {
+	if err := waitForSSH(ip); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -77,27 +77,21 @@ func usage() {
 	os.Exit(2)
 }
 
-func waitForSSH(ip, user string) error {
+func waitForSSH(ip string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultSSHTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "ssh",
-		"-o", "BatchMode=yes",
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "UserKnownHostsFile=/dev/null",
-		"-o", "ConnectTimeout=5",
-		fmt.Sprintf("%s@%s", user, ip),
-		"true",
-	)
-	cmd.Stdout = io.Discard
-	cmd.Stderr = io.Discard
-	if err := cmd.Run(); err == nil {
-		return nil
-	} else {
-		if ctx.Err() == context.DeadlineExceeded {
-			return fmt.Errorf("ssh to %s timed out after %s", ip, defaultSSHTimeout)
+	dialer := &net.Dialer{}
+	for {
+		conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(ip, "22"))
+		if err == nil {
+			_ = conn.Close()
+			return nil
 		}
-		return fmt.Errorf("ssh to %s is not ready: %w", ip, err)
+		if ctx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("ssh on %s timed out after %s", ip, defaultSSHTimeout)
+		}
+		time.Sleep(250 * time.Millisecond)
 	}
 }
 
