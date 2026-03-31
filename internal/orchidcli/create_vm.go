@@ -130,15 +130,15 @@ func runCreateVM(args []string) int {
 	seedISO := "/var/lib/libvirt/images/" + vmName + "-seed.iso"
 
 	fmt.Printf("Creating VM '%s' for %s...\n", vmName, repoURL)
-	if _, err := runRemoteCommand(context.Background(), hypervisor, "qemu-img", "create", "-f", "qcow2", "-b", base, "-F", "qcow2", vmDisk); err != nil {
+	if _, err := runRemoteCommand(context.Background(), hypervisor, "sudo", "qemu-img", "create", "-f", "qcow2", "-b", base, "-F", "qcow2", vmDisk); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	if _, err := runRemoteCommand(context.Background(), hypervisor, "cloud-localds", "--network-config="+filepath.Join(remoteTmpDir, "network-config"), seedISO, filepath.Join(remoteTmpDir, "user-data"), filepath.Join(remoteTmpDir, "meta-data")); err != nil {
+	if _, err := runRemoteCommand(context.Background(), hypervisor, "sudo", "cloud-localds", "--network-config="+filepath.Join(remoteTmpDir, "network-config"), seedISO, filepath.Join(remoteTmpDir, "user-data"), filepath.Join(remoteTmpDir, "meta-data")); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	if _, err := runRemoteCommand(context.Background(), hypervisor, "virt-install",
+	if _, err := runRemoteCommand(context.Background(), hypervisor, "sudo", "virt-install",
 		"--connect", "qemu:///system",
 		"--virt-type", virtType,
 		"--name", vmName,
