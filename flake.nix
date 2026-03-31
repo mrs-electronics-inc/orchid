@@ -3,55 +3,67 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs }:
-    let
-      system = "x86_64-linux";
-      pkgs = import nixpkgs { inherit system; };
-      orchid = pkgs.stdenv.mkDerivation {
-        pname = "orchid";
-        version = "0.1.0";
-        src = ./.;
-        nativeBuildInputs = [ pkgs.go ];
+  outputs = { self, nixpkgs, flake-utils }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
+        orchid = pkgs.stdenv.mkDerivation {
+          pname = "orchid";
+          version = "0.1.0";
+          src = ./.;
+          nativeBuildInputs = [ pkgs.go ];
 
-        buildPhase = ''
-          runHook preBuild
-          go build -o orchid .
-          runHook postBuild
-        '';
+          buildPhase = ''
+            runHook preBuild
+            export HOME="$TMPDIR"
+            export GOCACHE="$TMPDIR/go-cache"
+            export GOMODCACHE="$TMPDIR/go-mod-cache"
+            mkdir -p "$GOCACHE" "$GOMODCACHE"
+            go build -trimpath -buildvcs=false -o orchid .
+            runHook postBuild
+          '';
 
-        installPhase = ''
-          runHook preInstall
-          mkdir -p $out/bin
-          install -m755 orchid $out/bin/orchid
-          runHook postInstall
-        '';
-      };
-    in
-    {
-      packages.${system} = {
-        default = orchid;
-        orchid = orchid;
-      };
-      defaultPackage.${system} = orchid;
+          installPhase = ''
+            runHook preInstall
+            mkdir -p $out/bin
+            install -m755 orchid $out/bin/orchid
+            runHook postInstall
+          '';
 
-      apps.${system}.default = {
-        type = "app";
-        program = "${orchid}/bin/orchid";
-      };
+          meta = with pkgs.lib; {
+            description = "Orchid VM manager";
+            homepage = "https://github.com/mrs-electronics-inc/orchid";
+            license = licenses.mit;
+            platforms = platforms.all;
+          };
+        };
+      in
+      {
+        packages = {
+          default = orchid;
+          orchid = orchid;
+        };
 
-      nixosModules.default = { pkgs, ... }: {
-        environment.systemPackages = [ self.packages.${pkgs.system}.default ];
-      };
+        apps.default = {
+          type = "app";
+          program = "${orchid}/bin/orchid";
+        };
 
-      devShells.${system}.default = pkgs.mkShell {
-        packages = [
-          pkgs.go
-          pkgs.just
-        ];
-      };
+        nixosModules.default = { pkgs, ... }: {
+          environment.systemPackages = [ self.packages.${pkgs.system}.default ];
+        };
 
-      formatter.${system} = pkgs.nixfmt-rfc-style;
-    };
+        devShells.default = pkgs.mkShell {
+          packages = [
+            pkgs.go
+            pkgs.just
+          ];
+        };
+
+        formatter = pkgs.nixfmt-rfc-style;
+      }
+    );
 }

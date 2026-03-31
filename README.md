@@ -135,17 +135,6 @@ Install with Go:
 go install github.com/mrs-electronics-inc/orchid@latest
 ```
 
-Add Orchid to another NixOS flake:
-
-```nix
-inputs.orchid.url = "github:mrs-electronics-inc/orchid";
-
-# inside a NixOS module
-imports = [
-  inputs.orchid.nixosModules.default
-];
-```
-
 Set `ORCHID_HYPERVISOR` before using either command. Orchid does not ship a default hypervisor host.
 
 Connect to a VM by name:
