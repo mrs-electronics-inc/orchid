@@ -138,13 +138,25 @@ Install with Go:
 go install github.com/mrs-electronics-inc/orchid@latest
 ```
 
-Set `ORCHID_HYPERVISOR` before using `orchid connect`. Orchid does not ship a default hypervisor host.
+Configure the hypervisor once:
+
+```bash
+orchid config set hypervisor cs02
+```
+
+`ORCHID_HYPERVISOR` still overrides the config file for one-off commands. Orchid does not ship a default hypervisor host.
 
 Connect to a VM by name:
 
 ```bash
 ORCHID_HYPERVISOR=<hypervisor-host> \
 orchid connect addison-specture
+```
+
+The config file lives at `~/.config/orchid/config.toml` and uses a simple TOML key:
+
+```toml
+hypervisor = "cs02"
 ```
 
 ## License

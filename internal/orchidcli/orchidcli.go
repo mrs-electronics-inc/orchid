@@ -24,6 +24,8 @@ func Run(args []string) int {
 	switch args[0] {
 	case "connect":
 		return runConnect(args[1:])
+	case "config":
+		return runConfig(args[1:])
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -50,7 +52,7 @@ func runConnect(args []string) int {
 	vmName := fs.Arg(0)
 	remoteArgs := fs.Args()[1:]
 
-	hypervisor, err := requireEnv("ORCHID_HYPERVISOR")
+	hypervisor, err := resolveHypervisor()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -66,8 +68,52 @@ func runConnect(args []string) int {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: orchid connect [--user USER] <vm-name> [-- <ssh-args...>]")
+	fmt.Fprintln(os.Stderr, "usage: orchid <command> [args]")
+	fmt.Fprintln(os.Stderr, "commands: connect, config")
 	os.Exit(2)
+}
+
+func runConfig(args []string) int {
+	if len(args) < 1 {
+		usageConfig()
+	}
+
+	switch args[0] {
+	case "set":
+		return runConfigSet(args[1:])
+	case "-h", "--help", "help":
+		usageConfig()
+	default:
+		fmt.Fprintf(os.Stderr, "unknown config command: %s\n\n", args[0])
+		usageConfig()
+	}
+
+	return 0
+}
+
+func usageConfig() {
+	fmt.Fprintln(os.Stderr, "usage: orchid config set hypervisor <host>")
+	os.Exit(2)
+}
+
+func runConfigSet(args []string) int {
+	if len(args) != 2 || args[0] != "hypervisor" {
+		usageConfig()
+	}
+
+	path, err := configPath()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+
+	if err := writeConfig(path, config{Hypervisor: args[1]}); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+
+	fmt.Printf("Wrote %s\n", path)
+	return 0
 }
 
 func resolveIP(hypervisor, vmName string) (string, error) {
@@ -203,11 +249,4 @@ func envOr(name, fallback string) string {
 		return value
 	}
 	return fallback
-}
-
-func requireEnv(name string) (string, error) {
-	if value := os.Getenv(name); value != "" {
-		return value, nil
-	}
-	return "", fmt.Errorf("%s is required", name)
 }
