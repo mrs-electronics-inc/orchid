@@ -19,6 +19,7 @@
           buildPhase = ''
             runHook preBuild
             export HOME="$TMPDIR"
+            export CGO_ENABLED=0
             export GOCACHE="$TMPDIR/go-cache"
             export GOMODCACHE="$TMPDIR/go-mod-cache"
             mkdir -p "$GOCACHE" "$GOMODCACHE"
