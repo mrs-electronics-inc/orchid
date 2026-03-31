@@ -93,6 +93,7 @@ sudo just destroy-vm addison-specture
 On first boot, cloud-init performs only VM-specific setup: setting the hostname, cloning the target repo, and wiring the login shell so interactive sessions auto-enter `nix develop` when the repo has a `flake.nix`. Nix itself and the common toolchain are already present in the shared base image. `just create-vm` waits for cloud-init to finish before returning when `sshpass` is available on the hypervisor host.
 
 You can log in over the serial console or SSH with username `dev` and password `dev`.
+Use `orchid connect <vm-name>` from your laptop to resolve the current IP and open SSH without managing per-VM aliases.
 
 ## Base Image Workflow
 
@@ -126,29 +127,39 @@ Rebuild the shared base image after changing the default toolchain:
 sudo just build-base
 ```
 
-## SSH Config (on your laptop)
+## Orchid CLI
 
-VMs are on a NAT network only reachable from the hypervisor host. To SSH from your laptop, first find your libvirt subnet on the hypervisor:
-
-```bash
-virsh -c qemu:///system net-dumpxml default | grep 'ip address'
-# Example output: <ip address='192.168.122.1' netmask='255.255.255.0'>
-```
-
-Then add a wildcard entry to `~/.ssh/config` on your laptop using that subnet:
-
-```
-Host <subnet>.*
-    User dev
-    ProxyJump <hypervisor-host>
-    StrictHostKeyChecking no
-    UserKnownHostsFile /dev/null
-```
-
-Then connect to any VM by IP:
+Install with Go:
 
 ```bash
-ssh <vm-ip>
+go install github.com/mrs-electronics-inc/orchid@latest
+```
+
+Add Orchid to another NixOS flake:
+
+```nix
+inputs.orchid.url = "github:mrs-electronics-inc/orchid";
+
+# inside a NixOS module
+imports = [
+  inputs.orchid.nixosModules.default
+];
+```
+
+Set `ORCHID_HYPERVISOR` before using either command. Orchid does not ship a default hypervisor host.
+
+Connect to a VM by name:
+
+```bash
+ORCHID_HYPERVISOR=<hypervisor-host> \
+orchid connect addison-specture
+```
+
+Print the current VM IP:
+
+```bash
+ORCHID_HYPERVISOR=<hypervisor-host> \
+orchid ip addison-specture
 ```
 
 ## License
