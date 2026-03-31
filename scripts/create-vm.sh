@@ -160,13 +160,13 @@ virt-install \
 
 # 5. Wait for IP
 echo "Waiting for VM to get an IP..."
-IP="$(orchid_wait_for_ip "${CONNECT}" "${VM_NAME}" 30)" || true
+IP="$(orchid_wait_for_ip "${CONNECT}" "${VM_NAME}" 20 5)" || true
 
 if [[ -n "${IP}" ]]; then
   CLOUD_INIT_VERIFIED=0
   if command -v sshpass >/dev/null 2>&1; then
     echo "Waiting for SSH to become available..."
-    orchid_wait_for_ssh "${IP}" dev dev 60 || true
+    orchid_wait_for_ssh "${IP}" dev dev 20 5 || true
 
     echo "Waiting for cloud-init to finish..."
     if ! orchid_wait_for_cloud_init "${IP}"; then

@@ -11,8 +11,8 @@ orchid_select_virt_type() {
 orchid_wait_for_ip() {
   local connect="$1"
   local domain="$2"
-  local max_attempts="${3:-60}"
-  local sleep_seconds="${4:-2}"
+  local max_attempts="${3:-20}"
+  local sleep_seconds="${4:-5}"
   local ip=""
   local mac=""
   local attempt=""
@@ -40,8 +40,8 @@ orchid_wait_for_ssh() {
   local ip="$1"
   local user="${2:-dev}"
   local password="${3:-dev}"
-  local max_attempts="${4:-60}"
-  local sleep_seconds="${5:-2}"
+  local max_attempts="${4:-20}"
+  local sleep_seconds="${5:-5}"
   local attempt=""
 
   for attempt in $(seq 1 "${max_attempts}"); do

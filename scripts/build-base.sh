@@ -135,13 +135,13 @@ virt-install \
   --import
 
 echo "Waiting for base builder VM to get an IP..."
-IP="$(orchid_wait_for_ip "${CONNECT}" "${BUILD_VM}" 60)" || {
+IP="$(orchid_wait_for_ip "${CONNECT}" "${BUILD_VM}" 20 5)" || {
   echo "Build VM did not receive an IP address." >&2
   exit 1
 }
 
 echo "Waiting for SSH to become available..."
-orchid_wait_for_ssh "${IP}" || {
+orchid_wait_for_ssh "${IP}" dev dev 20 5 || {
   echo "Build VM SSH did not become ready in time." >&2
   exit 1
 }
