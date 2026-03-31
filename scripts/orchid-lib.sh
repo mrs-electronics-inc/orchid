@@ -59,24 +59,22 @@ orchid_wait_for_ssh() {
   return 1
 }
 
-orchid_start_bootstrap_log_stream() {
+orchid_wait_for_cloud_init() {
   local ip="$1"
   local user="${2:-dev}"
   local password="${3:-dev}"
-
-  sshpass -p "${password}" ssh \
+  if ! sshpass -p "${password}" ssh \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
     -o ConnectTimeout=5 \
-    "${user}@${ip}" 'sudo tail -n 0 -F /var/log/orchid-bootstrap.log' &
-  ORCHID_BOOTSTRAP_LOG_PID="$!"
-}
-
-orchid_stop_pid() {
-  local pid="${1:-}"
-
-  if [[ -n "${pid}" ]]; then
-    kill "${pid}" >/dev/null 2>&1 || true
-    wait "${pid}" >/dev/null 2>&1 || true
+    "${user}@${ip}" 'sudo cloud-init status --wait && sudo cloud-init status --long'; then
+    echo ""
+    echo "cloud-init reported a failure. Recent bootstrap log:"
+    sshpass -p "${password}" ssh \
+      -o StrictHostKeyChecking=no \
+      -o UserKnownHostsFile=/dev/null \
+      -o ConnectTimeout=5 \
+      "${user}@${ip}" 'sudo tail -n 200 /var/log/orchid-bootstrap.log || sudo tail -n 200 /var/log/cloud-init-output.log || true'
+    return 1
   fi
 }

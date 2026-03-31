@@ -8,7 +8,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/orchid-lib.sh"
 VIRT_TYPE="$(orchid_select_virt_type)"
 TMP_DIR=""
-BOOTSTRAP_LOG_PID=""
 
 usage() {
   cat >&2 <<EOF
@@ -56,9 +55,6 @@ echo "Creating VM '${VM_NAME}' for ${REPO_URL}..."
 
 TMP_DIR="$(mktemp -d "/tmp/${VM_NAME}.XXXXXX")"
 cleanup() {
-  if [[ -n "${BOOTSTRAP_LOG_PID}" ]]; then
-    orchid_stop_pid "${BOOTSTRAP_LOG_PID}"
-  fi
   rm -rf "${TMP_DIR}"
 }
 trap cleanup EXIT
@@ -172,29 +168,10 @@ if [[ -n "${IP}" ]]; then
     echo "Waiting for SSH to become available..."
     orchid_wait_for_ssh "${IP}" dev dev 60 || true
 
-    echo "Streaming bootstrap log while cloud-init runs..."
-    orchid_start_bootstrap_log_stream "${IP}"
-    BOOTSTRAP_LOG_PID="${ORCHID_BOOTSTRAP_LOG_PID}"
-
     echo "Waiting for cloud-init to finish..."
-    if ! sshpass -p dev ssh \
-      -o StrictHostKeyChecking=no \
-      -o UserKnownHostsFile=/dev/null \
-      -o ConnectTimeout=5 \
-      dev@"${IP}" 'sudo cloud-init status --wait && sudo cloud-init status --long'; then
-      echo ""
-      echo "cloud-init reported a failure. Recent bootstrap log:"
-      orchid_stop_pid "${BOOTSTRAP_LOG_PID}"
-      BOOTSTRAP_LOG_PID=""
-      sshpass -p dev ssh \
-        -o StrictHostKeyChecking=no \
-        -o UserKnownHostsFile=/dev/null \
-        -o ConnectTimeout=5 \
-        dev@"${IP}" 'sudo tail -n 200 /var/log/orchid-bootstrap.log || sudo tail -n 200 /var/log/cloud-init-output.log || true'
+    if ! orchid_wait_for_cloud_init "${IP}"; then
       exit 1
     fi
-    orchid_stop_pid "${BOOTSTRAP_LOG_PID}"
-    BOOTSTRAP_LOG_PID=""
     CLOUD_INIT_VERIFIED=1
   else
     echo "sshpass is not installed on the host, so cloud-init completion was not checked automatically."
