@@ -113,8 +113,8 @@ write_files:
       ZSH_THEME="robbyrussell"
       plugins=(git)
 
-      source "${ZSH}/oh-my-zsh.sh"
-      eval "$(direnv hook zsh)"
+      source "\${ZSH}/oh-my-zsh.sh"
+      eval "\$(direnv hook zsh)"
       ORCHID_ZSHRC
       chown dev:dev /home/dev/.zshrc
 runcmd:
