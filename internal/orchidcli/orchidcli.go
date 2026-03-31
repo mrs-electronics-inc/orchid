@@ -93,7 +93,7 @@ func runIP(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	ip, err := waitForIP(hypervisor, fs.Arg(0), defaultIPAttempts, defaultIPSleep)
+	ip, err := resolveIP(hypervisor, fs.Arg(0))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
