@@ -193,3 +193,5 @@ echo "Current base image link:"
 echo "  ${BASE_LINK} -> ${BASE_VERSION}"
 echo ""
 echo "Old versioned Orchid base images are kept in place so existing overlays keep working."
+
+rm -f "${BUILD_DISK}" "${SEED_IMAGE}"

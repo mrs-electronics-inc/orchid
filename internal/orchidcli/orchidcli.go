@@ -13,12 +13,9 @@ import (
 )
 
 const (
-	defaultSSHUser     = "dev"
-	defaultIPAttempts  = 20
-	defaultIPSleep     = 5 * time.Second
-	defaultSSHAttempts = 20
-	defaultSSHSleep    = 5 * time.Second
-	resolveIPTimeout   = 10 * time.Second
+	defaultSSHUser    = "dev"
+	defaultSSHTimeout = 10 * time.Second
+	resolveIPTimeout  = 10 * time.Second
 )
 
 func Run(args []string) int {
@@ -66,7 +63,7 @@ func runConnect(args []string) int {
 		return 1
 	}
 
-	if err := waitForSSH(ip, *user, defaultSSHAttempts, defaultSSHSleep); err != nil {
+	if err := waitForSSH(ip, *user); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -80,29 +77,28 @@ func usage() {
 	os.Exit(2)
 }
 
-func waitForSSH(ip, user string, attempts int, sleep time.Duration) error {
-	var lastErr error
-	for i := 0; i < attempts; i++ {
-		cmd := exec.Command("ssh",
-			"-o", "BatchMode=yes",
-			"-o", "StrictHostKeyChecking=no",
-			"-o", "UserKnownHostsFile=/dev/null",
-			"-o", "ConnectTimeout=5",
-			fmt.Sprintf("%s@%s", user, ip),
-			"true",
-		)
-		cmd.Stdout = io.Discard
-		cmd.Stderr = io.Discard
-		if err := cmd.Run(); err == nil {
-			return nil
-		} else {
-			lastErr = err
+func waitForSSH(ip, user string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultSSHTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "ssh",
+		"-o", "BatchMode=yes",
+		"-o", "StrictHostKeyChecking=no",
+		"-o", "UserKnownHostsFile=/dev/null",
+		"-o", "ConnectTimeout=5",
+		fmt.Sprintf("%s@%s", user, ip),
+		"true",
+	)
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	if err := cmd.Run(); err == nil {
+		return nil
+	} else {
+		if ctx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("ssh to %s timed out after %s", ip, defaultSSHTimeout)
 		}
-		if i < attempts-1 {
-			time.Sleep(sleep)
-		}
+		return fmt.Errorf("ssh to %s is not ready: %w", ip, err)
 	}
-	return fmt.Errorf("ssh to %s never became ready: %v", ip, lastErr)
 }
 
 func resolveIP(hypervisor, vmName string) (string, error) {

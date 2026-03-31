@@ -6,6 +6,7 @@ BASE_LINK="${IMAGES}/orchid-base.qcow2"
 CONNECT="qemu:///system"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/orchid-lib.sh"
+HYPERVISOR_HOST="$(hostname -s)"
 VIRT_TYPE="$(orchid_select_virt_type)"
 TMP_DIR=""
 
@@ -180,7 +181,7 @@ if [[ -n "${IP}" ]]; then
 
   echo ""
   echo "VM '${VM_NAME}' is ready!"
-  echo "  ssh dev@${IP}"
+  echo "  ORCHID_HYPERVISOR=${HYPERVISOR_HOST} orchid connect ${VM_NAME}"
   echo ""
   if [[ "${CLOUD_INIT_VERIFIED}" -eq 1 ]]; then
     echo "cloud-init completed."
