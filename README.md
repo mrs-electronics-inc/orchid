@@ -59,14 +59,17 @@ If both `hypervisor` and `identity_file` are already set in `~/.config/orchid/co
 orchid create-vm --identity-file <path-to-identity> <repo-url>
 
 orchid create-vm \
-  --identity-file <path-to-identity> \
   --name <vm-name> \
   <repo-url>
 ```
 
 On first boot, cloud-init performs only VM-specific setup: setting the hostname, cloning the target repo, installing the authorized key, and dropping a repo-local `.envrc` so `direnv` loads the flake when the checkout has a `flake.nix`.
 
-`orchid connect <vm-name>` opens SSH through the configured hypervisor. Password login is disabled in the guest.
+Once `hypervisor` and `identity_file` are set in `~/.config/orchid/config.toml`, `orchid connect` does not need flags:
+
+```bash
+orchid connect <vm-name>
+```
 
 ## License
 
