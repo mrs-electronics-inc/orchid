@@ -16,13 +16,15 @@ Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Orchid
 
 Host setup, base image maintenance, and troubleshooting live in [docs/server.md](docs/server.md).
 
-## Orchid CLI
+## Install
 
 Install with Go:
 
 ```bash
 go install github.com/mrs-electronics-inc/orchid@latest
 ```
+
+## Config
 
 Configure the hypervisor once:
 
@@ -43,15 +45,7 @@ hypervisor = "<hypervisor-host>"
 identity_file = "<path-to-identity>"
 ```
 
-One-off overrides still come from flags:
-
-```bash
-orchid connect --hypervisor <hypervisor-host> --identity-file <path-to-identity> <vm-name>
-```
-
-If both `hypervisor` and `identity_file` are already set in `~/.config/orchid/config.toml`, the flags can be omitted.
-
-## Usage
+## Create Virtual Machine
 
 `orchid create-vm` runs on your laptop, talks to the configured hypervisor, derives the VM name, and provisions a VM from the shared Orchid base image. By default, VM names are prefixed by the local username so different developers do not collide.
 
@@ -65,11 +59,13 @@ orchid create-vm \
 
 On first boot, cloud-init performs only VM-specific setup: setting the hostname, cloning the target repo, installing the authorized key, and dropping a repo-local `.envrc` so `direnv` loads the flake when the checkout has a `flake.nix`.
 
-Once `hypervisor` and `identity_file` are set in `~/.config/orchid/config.toml`, `orchid connect` does not need flags:
+## Connect
 
 ```bash
 orchid connect <vm-name>
 ```
+
+Once `hypervisor` and `identity_file` are set in `~/.config/orchid/config.toml`, `orchid connect` does not need flags.
 
 ## License
 
