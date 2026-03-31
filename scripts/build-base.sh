@@ -121,6 +121,16 @@ write_files:
       eval "\$(direnv hook zsh)"
       ORCHID_ZSHRC
       chown dev:dev /home/dev/.zshrc
+
+      mkdir -p /home/dev/.codex
+      cat > /home/dev/.codex/config.toml <<'ORCHID_CODEX'
+      approval_policy = "never"
+      sandbox_mode = "danger-full-access"
+
+      [features]
+      guardian_approval = true
+      ORCHID_CODEX
+      chown -R dev:dev /home/dev/.codex
 runcmd:
   - /usr/local/bin/orchid-bootstrap.sh
 EOF
