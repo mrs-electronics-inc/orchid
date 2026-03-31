@@ -10,18 +10,15 @@ BUILD_VM="orchid-base-build-$(date -u +%Y%m%d%H%M%S)"
 BUILD_DISK="${IMAGES}/${BUILD_VM}.qcow2"
 SEED_IMAGE="${IMAGES}/${BUILD_VM}-seed.iso"
 CONNECT="qemu:///system"
-if [[ -e /dev/kvm ]]; then
-  VIRT_TYPE="${VIRT_TYPE:-kvm}"
-else
-  VIRT_TYPE="${VIRT_TYPE:-qemu}"
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/orchid-lib.sh"
+VIRT_TYPE="$(orchid_select_virt_type)"
 TMP_DIR="$(mktemp -d "/tmp/${BUILD_VM}.XXXXXX")"
 BOOTSTRAP_LOG_PID=""
 
 cleanup() {
   if [[ -n "${BOOTSTRAP_LOG_PID}" ]]; then
-    kill "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
-    wait "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
+    orchid_stop_pid "${BOOTSTRAP_LOG_PID}"
   fi
   rm -rf "${TMP_DIR}"
   if virsh -c "${CONNECT}" dominfo "${BUILD_VM}" >/dev/null 2>&1; then
@@ -29,49 +26,6 @@ cleanup() {
     virsh -c "${CONNECT}" undefine "${BUILD_VM}" >/dev/null 2>&1 || true
   fi
   rm -f "${SEED_IMAGE}" "${BUILD_DISK}"
-}
-
-wait_for_ip() {
-  local ip=""
-  local mac=""
-  local attempt=""
-
-  for attempt in $(seq 1 60); do
-    ip="$(virsh -c "${CONNECT}" domifaddr "${BUILD_VM}" 2>/dev/null | awk '/ipv4/ && ip == "" {split($4,a,"/"); ip=a[1]} END {print ip}')"
-    if [[ -z "${ip}" ]]; then
-      mac="$(virsh -c "${CONNECT}" domiflist "${BUILD_VM}" 2>/dev/null | awk 'NR > 2 && $5 != "-" && mac == "" {mac=$5} END {print mac}' | tr '[:upper:]' '[:lower:]')"
-      if [[ -n "${mac}" ]]; then
-        ip="$(virsh -c "${CONNECT}" net-dhcp-leases default 2>/dev/null | awk -v mac="${mac}" 'tolower($0) ~ mac && /ipv4/ && ip == "" {split($5,a,"/"); ip=a[1]} END {print ip}')"
-      fi
-    fi
-    if [[ -n "${ip}" ]]; then
-      printf '%s\n' "${ip}"
-      return 0
-    fi
-    echo "  attempt ${attempt}/60: no IP yet" >&2
-    sleep 2
-  done
-
-  return 1
-}
-
-wait_for_ssh() {
-  local ip="$1"
-  local attempt=""
-
-  for attempt in $(seq 1 60); do
-    if sshpass -p dev ssh \
-      -o StrictHostKeyChecking=no \
-      -o UserKnownHostsFile=/dev/null \
-      -o ConnectTimeout=5 \
-      dev@"${ip}" true >/dev/null 2>&1; then
-      return 0
-    fi
-    echo "  attempt ${attempt}/60: ssh not ready yet" >&2
-    sleep 2
-  done
-
-  return 1
 }
 
 trap cleanup EXIT
@@ -185,24 +139,20 @@ virt-install \
   --import
 
 echo "Waiting for base builder VM to get an IP..."
-IP="$(wait_for_ip)" || {
+IP="$(orchid_wait_for_ip "${CONNECT}" "${BUILD_VM}" 60)" || {
   echo "Build VM did not receive an IP address." >&2
   exit 1
 }
 
 echo "Waiting for SSH to become available..."
-wait_for_ssh "${IP}" || {
+orchid_wait_for_ssh "${IP}" || {
   echo "Build VM SSH did not become ready in time." >&2
   exit 1
 }
 
 echo "Streaming bootstrap log while cloud-init runs..."
-sshpass -p dev ssh \
-  -o StrictHostKeyChecking=no \
-  -o UserKnownHostsFile=/dev/null \
-  -o ConnectTimeout=5 \
-  dev@"${IP}" 'sudo tail -n 0 -F /var/log/orchid-bootstrap.log' &
-BOOTSTRAP_LOG_PID=$!
+orchid_start_bootstrap_log_stream "${IP}"
+BOOTSTRAP_LOG_PID="${ORCHID_BOOTSTRAP_LOG_PID}"
 
 echo "Waiting for cloud-init to finish..."
 if ! sshpass -p dev ssh \
@@ -212,8 +162,7 @@ if ! sshpass -p dev ssh \
   dev@"${IP}" 'sudo cloud-init status --wait && sudo cloud-init status --long'; then
   echo ""
   echo "cloud-init reported a failure. Recent bootstrap log:"
-  kill "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
-  wait "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
+  orchid_stop_pid "${BOOTSTRAP_LOG_PID}"
   BOOTSTRAP_LOG_PID=""
   sshpass -p dev ssh \
     -o StrictHostKeyChecking=no \
@@ -223,8 +172,7 @@ if ! sshpass -p dev ssh \
   exit 1
 fi
 
-kill "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
-wait "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
+orchid_stop_pid "${BOOTSTRAP_LOG_PID}"
 BOOTSTRAP_LOG_PID=""
 
 echo "Cleaning the image for cloning..."

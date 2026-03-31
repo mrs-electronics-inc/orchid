@@ -4,11 +4,9 @@ set -euo pipefail
 IMAGES="/var/lib/libvirt/images"
 BASE_LINK="${IMAGES}/orchid-base.qcow2"
 CONNECT="qemu:///system"
-if [[ -e /dev/kvm ]]; then
-  VIRT_TYPE="${VIRT_TYPE:-kvm}"
-else
-  VIRT_TYPE="${VIRT_TYPE:-qemu}"
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/orchid-lib.sh"
+VIRT_TYPE="$(orchid_select_virt_type)"
 TMP_DIR=""
 BOOTSTRAP_LOG_PID=""
 
@@ -59,8 +57,7 @@ echo "Creating VM '${VM_NAME}' for ${REPO_URL}..."
 TMP_DIR="$(mktemp -d "/tmp/${VM_NAME}.XXXXXX")"
 cleanup() {
   if [[ -n "${BOOTSTRAP_LOG_PID}" ]]; then
-    kill "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
-    wait "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
+    orchid_stop_pid "${BOOTSTRAP_LOG_PID}"
   fi
   rm -rf "${TMP_DIR}"
 }
@@ -167,42 +164,17 @@ virt-install \
 
 # 5. Wait for IP
 echo "Waiting for VM to get an IP..."
-for i in $(seq 1 30); do
-  IP="$(virsh -c "${CONNECT}" domifaddr "${VM_NAME}" 2>/dev/null | awk '/ipv4/ && ip == "" {split($4,a,"/"); ip=a[1]} END {print ip}')"
-  if [[ -z "${IP}" ]]; then
-    MAC="$(virsh -c "${CONNECT}" domiflist "${VM_NAME}" 2>/dev/null | awk 'NR > 2 && $5 != "-" && mac == "" {mac=$5} END {print mac}' | tr '[:upper:]' '[:lower:]')"
-    if [[ -n "${MAC}" ]]; then
-      IP="$(virsh -c "${CONNECT}" net-dhcp-leases default 2>/dev/null | awk -v mac="${MAC}" 'tolower($0) ~ mac && /ipv4/ && ip == "" {split($5,a,"/"); ip=a[1]} END {print ip}')"
-    fi
-  fi
-  [[ -n "${IP}" ]] && break
-  echo "  attempt ${i}/30: no IP yet"
-  sleep 2
-done
+IP="$(orchid_wait_for_ip "${CONNECT}" "${VM_NAME}" 30)" || true
 
 if [[ -n "${IP}" ]]; then
   CLOUD_INIT_VERIFIED=0
   if command -v sshpass >/dev/null 2>&1; then
     echo "Waiting for SSH to become available..."
-    for i in $(seq 1 60); do
-      if sshpass -p dev ssh \
-        -o StrictHostKeyChecking=no \
-        -o UserKnownHostsFile=/dev/null \
-        -o ConnectTimeout=5 \
-        dev@"${IP}" true >/dev/null 2>&1; then
-        break
-      fi
-      echo "  attempt ${i}/60: ssh not ready yet"
-      sleep 2
-    done
+    orchid_wait_for_ssh "${IP}" dev dev 60 || true
 
     echo "Streaming bootstrap log while cloud-init runs..."
-    sshpass -p dev ssh \
-      -o StrictHostKeyChecking=no \
-      -o UserKnownHostsFile=/dev/null \
-      -o ConnectTimeout=5 \
-      dev@"${IP}" 'sudo tail -n 0 -F /var/log/orchid-bootstrap.log' &
-    BOOTSTRAP_LOG_PID=$!
+    orchid_start_bootstrap_log_stream "${IP}"
+    BOOTSTRAP_LOG_PID="${ORCHID_BOOTSTRAP_LOG_PID}"
 
     echo "Waiting for cloud-init to finish..."
     if ! sshpass -p dev ssh \
@@ -212,8 +184,7 @@ if [[ -n "${IP}" ]]; then
       dev@"${IP}" 'sudo cloud-init status --wait && sudo cloud-init status --long'; then
       echo ""
       echo "cloud-init reported a failure. Recent bootstrap log:"
-      kill "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
-      wait "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
+      orchid_stop_pid "${BOOTSTRAP_LOG_PID}"
       BOOTSTRAP_LOG_PID=""
       sshpass -p dev ssh \
         -o StrictHostKeyChecking=no \
@@ -222,8 +193,7 @@ if [[ -n "${IP}" ]]; then
         dev@"${IP}" 'sudo tail -n 200 /var/log/orchid-bootstrap.log || sudo tail -n 200 /var/log/cloud-init-output.log || true'
       exit 1
     fi
-    kill "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
-    wait "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
+    orchid_stop_pid "${BOOTSTRAP_LOG_PID}"
     BOOTSTRAP_LOG_PID=""
     CLOUD_INIT_VERIFIED=1
   else
