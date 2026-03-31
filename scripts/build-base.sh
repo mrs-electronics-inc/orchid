@@ -10,6 +10,11 @@ BUILD_VM="orchid-base-build-$(date -u +%Y%m%d%H%M%S)"
 BUILD_DISK="${IMAGES}/${BUILD_VM}.qcow2"
 SEED_IMAGE="${IMAGES}/${BUILD_VM}-seed.iso"
 CONNECT="qemu:///system"
+if [[ -e /dev/kvm ]]; then
+  VIRT_TYPE="${VIRT_TYPE:-kvm}"
+else
+  VIRT_TYPE="${VIRT_TYPE:-qemu}"
+fi
 TMP_DIR="$(mktemp -d "/tmp/${BUILD_VM}.XXXXXX")"
 
 cleanup() {
@@ -160,6 +165,7 @@ cloud-localds --network-config="${TMP_DIR}/network-config" \
 
 virt-install \
   --connect "${CONNECT}" \
+  --virt-type "${VIRT_TYPE}" \
   --name "${BUILD_VM}" \
   --memory 2048 \
   --vcpus 1 \

@@ -4,6 +4,11 @@ set -euo pipefail
 IMAGES="/var/lib/libvirt/images"
 BASE_LINK="${IMAGES}/orchid-base.qcow2"
 CONNECT="qemu:///system"
+if [[ -e /dev/kvm ]]; then
+  VIRT_TYPE="${VIRT_TYPE:-kvm}"
+else
+  VIRT_TYPE="${VIRT_TYPE:-qemu}"
+fi
 TMP_DIR=""
 
 usage() {
@@ -141,6 +146,7 @@ cloud-localds --network-config="${TMP_DIR}/network-config" \
 # 4. Launch VM
 virt-install \
   --connect "${CONNECT}" \
+  --virt-type "${VIRT_TYPE}" \
   --name "${VM_NAME}" \
   --memory 2048 \
   --vcpus 1 \
