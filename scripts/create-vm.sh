@@ -103,18 +103,13 @@ write_files:
       fi
 
       if [[ -f flake.nix ]]; then
-        exec nix develop -c bash --login
+        exec nix develop -c bash --noprofile --norc -i
       fi
       ORCHID_SHELL
       sed -i 's|__REPO_DIR__|/home/dev/${REPO_NAME}|' /usr/local/bin/orchid-dev-shell.sh
       chmod 0755 /usr/local/bin/orchid-dev-shell.sh
 
       cat > /home/dev/.bash_profile <<'ORCHID_PROFILE'
-      # Source the normal interactive shell config first.
-      if [[ -f ~/.bashrc ]]; then
-        . ~/.bashrc
-      fi
-
       . /usr/local/bin/orchid-dev-shell.sh
       ORCHID_PROFILE
       chown dev:dev /home/dev/.bash_profile
