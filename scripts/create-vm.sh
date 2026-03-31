@@ -10,6 +10,7 @@ else
   VIRT_TYPE="${VIRT_TYPE:-qemu}"
 fi
 TMP_DIR=""
+BOOTSTRAP_LOG_PID=""
 
 usage() {
   cat >&2 <<EOF
@@ -57,6 +58,10 @@ echo "Creating VM '${VM_NAME}' for ${REPO_URL}..."
 
 TMP_DIR="$(mktemp -d "/tmp/${VM_NAME}.XXXXXX")"
 cleanup() {
+  if [[ -n "${BOOTSTRAP_LOG_PID}" ]]; then
+    kill "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
+    wait "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
+  fi
   rm -rf "${TMP_DIR}"
 }
 trap cleanup EXIT
@@ -191,14 +196,25 @@ if [[ -n "${IP}" ]]; then
       sleep 2
     done
 
+    echo "Streaming bootstrap log while cloud-init runs..."
+    sshpass -p dev ssh \
+      -o StrictHostKeyChecking=no \
+      -o UserKnownHostsFile=/dev/null \
+      -o ConnectTimeout=5 \
+      dev@"${IP}" 'sudo tail -n 0 -F /var/log/orchid-bootstrap.log' &
+    BOOTSTRAP_LOG_PID=$!
+
     echo "Waiting for cloud-init to finish..."
-    if ! sshpass -p dev ssh -tt \
+    if ! sshpass -p dev ssh \
       -o StrictHostKeyChecking=no \
       -o UserKnownHostsFile=/dev/null \
       -o ConnectTimeout=5 \
       dev@"${IP}" 'sudo cloud-init status --wait && sudo cloud-init status --long'; then
       echo ""
       echo "cloud-init reported a failure. Recent bootstrap log:"
+      kill "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
+      wait "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
+      BOOTSTRAP_LOG_PID=""
       sshpass -p dev ssh \
         -o StrictHostKeyChecking=no \
         -o UserKnownHostsFile=/dev/null \
@@ -206,6 +222,9 @@ if [[ -n "${IP}" ]]; then
         dev@"${IP}" 'sudo tail -n 200 /var/log/orchid-bootstrap.log || sudo tail -n 200 /var/log/cloud-init-output.log || true'
       exit 1
     fi
+    kill "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
+    wait "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
+    BOOTSTRAP_LOG_PID=""
     CLOUD_INIT_VERIFIED=1
   else
     echo "sshpass is not installed on the host, so cloud-init completion was not checked automatically."

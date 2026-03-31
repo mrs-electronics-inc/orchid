@@ -16,8 +16,13 @@ else
   VIRT_TYPE="${VIRT_TYPE:-qemu}"
 fi
 TMP_DIR="$(mktemp -d "/tmp/${BUILD_VM}.XXXXXX")"
+BOOTSTRAP_LOG_PID=""
 
 cleanup() {
+  if [[ -n "${BOOTSTRAP_LOG_PID}" ]]; then
+    kill "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
+    wait "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
+  fi
   rm -rf "${TMP_DIR}"
   if virsh -c "${CONNECT}" dominfo "${BUILD_VM}" >/dev/null 2>&1; then
     virsh -c "${CONNECT}" destroy "${BUILD_VM}" >/dev/null 2>&1 || true
@@ -191,14 +196,25 @@ wait_for_ssh "${IP}" || {
   exit 1
 }
 
+echo "Streaming bootstrap log while cloud-init runs..."
+sshpass -p dev ssh \
+  -o StrictHostKeyChecking=no \
+  -o UserKnownHostsFile=/dev/null \
+  -o ConnectTimeout=5 \
+  dev@"${IP}" 'sudo tail -n 0 -F /var/log/orchid-bootstrap.log' &
+BOOTSTRAP_LOG_PID=$!
+
 echo "Waiting for cloud-init to finish..."
-if ! sshpass -p dev ssh -tt \
+if ! sshpass -p dev ssh \
   -o StrictHostKeyChecking=no \
   -o UserKnownHostsFile=/dev/null \
   -o ConnectTimeout=5 \
   dev@"${IP}" 'sudo cloud-init status --wait && sudo cloud-init status --long'; then
   echo ""
   echo "cloud-init reported a failure. Recent bootstrap log:"
+  kill "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
+  wait "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
+  BOOTSTRAP_LOG_PID=""
   sshpass -p dev ssh \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
@@ -206,6 +222,10 @@ if ! sshpass -p dev ssh -tt \
     dev@"${IP}" 'sudo tail -n 200 /var/log/orchid-bootstrap.log || sudo tail -n 200 /var/log/cloud-init-output.log || true'
   exit 1
 fi
+
+kill "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
+wait "${BOOTSTRAP_LOG_PID}" >/dev/null 2>&1 || true
+BOOTSTRAP_LOG_PID=""
 
 echo "Cleaning the image for cloning..."
 sshpass -p dev ssh \
