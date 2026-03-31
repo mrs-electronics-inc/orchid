@@ -16,25 +16,6 @@ Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Orchid
 
 Host setup, base image maintenance, and troubleshooting live in [docs/server.md](docs/server.md).
 
-## Usage
-
-Point orchid at a Git repo URL. `orchid create-vm` runs on your laptop, talks to the configured hypervisor, derives the VM name, and provisions a VM from the shared Orchid base image. By default, VM names are prefixed by the local username so different developers do not collide.
-
-```bash
-orchid create-vm --identity-file ~/.ssh/id_ed25519 https://github.com/specture-system/specture
-
-orchid create-vm \
-  --identity-file ~/.ssh/id_ed25519 \
-  --name my-dev \
-  https://github.com/specture-system/specture
-
-sudo just destroy-vm addison-specture
-```
-
-On first boot, cloud-init performs only VM-specific setup: setting the hostname, cloning the target repo, installing the authorized key, and dropping a repo-local `.envrc` so `direnv` loads the flake when the checkout has a `flake.nix`. The shared base already provides Nix, zsh, the `robbyrussell` theme, `direnv`, and the common toolchain.
-
-Use `orchid connect <vm-name>` from your laptop to resolve the current IP and open SSH through the configured hypervisor without managing per-VM aliases. Password login is disabled in the guest.
-
 ## Orchid CLI
 
 Install with Go:
@@ -46,29 +27,48 @@ go install github.com/mrs-electronics-inc/orchid@latest
 Configure the hypervisor once:
 
 ```bash
-orchid config set hypervisor cs02
+orchid config set hypervisor <hypervisor-host>
 ```
 
 Configure the SSH identity once:
 
 ```bash
-orchid config set identity-file ~/.ssh/id_ed25519
+orchid config set identity-file <path-to-identity>
 ```
 
 The config file lives at `~/.config/orchid/config.toml` and uses simple TOML keys:
 
 ```toml
-hypervisor = "cs02"
-identity_file = "/home/addison/.ssh/id_ed25519"
+hypervisor = "<hypervisor-host>"
+identity_file = "<path-to-identity>"
 ```
 
 One-off overrides still come from flags:
 
 ```bash
-orchid connect --hypervisor cs02 --identity-file ~/.ssh/id_ed25519 addison-specture
+orchid connect --hypervisor <hypervisor-host> --identity-file <path-to-identity> <vm-name>
 ```
 
 If both `hypervisor` and `identity_file` are already set in `~/.config/orchid/config.toml`, the flags can be omitted.
+
+## Usage
+
+`orchid create-vm` runs on your laptop, talks to the configured hypervisor, derives the VM name, and provisions a VM from the shared Orchid base image. By default, VM names are prefixed by the local username so different developers do not collide.
+
+```bash
+orchid create-vm --identity-file <path-to-identity> <repo-url>
+
+orchid create-vm \
+  --identity-file <path-to-identity> \
+  --name <vm-name> \
+  <repo-url>
+
+sudo just destroy-vm <vm-name>
+```
+
+On first boot, cloud-init performs only VM-specific setup: setting the hostname, cloning the target repo, installing the authorized key, and dropping a repo-local `.envrc` so `direnv` loads the flake when the checkout has a `flake.nix`.
+
+`orchid connect <vm-name>` opens SSH through the configured hypervisor. Password login is disabled in the guest.
 
 ## License
 
