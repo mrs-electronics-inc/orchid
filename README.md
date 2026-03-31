@@ -2,7 +2,7 @@
 
 _Because why not._
 
-Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Orchid keeps per-VM disks small by building a shared base image with the common toolchain already installed, then creating thin qcow2 overlays for each repo-specific VM. VMs default to a `dev` user with password `dev`.
+Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Orchid keeps per-VM disks small by building a shared base image with the common toolchain already installed, then creating thin qcow2 overlays for each repo-specific VM. The shared base also gives `dev` a zsh shell with the `robbyrussell` theme and `direnv` for repo-local environments. VMs default to a `dev` user with password `dev`.
 
 ## Requirements
 
@@ -14,7 +14,7 @@ Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Orchid
 | Resource | Value                           |
 | -------- | ------------------------------- |
 | Base OS  | Debian 12 (`generic` qcow2)     |
-| Shared base | `orchid-base.qcow2` symlink to the current versioned Orchid base image with Nix, Node.js, Go, PI coding agent, and common operator tools |
+| Shared base | `orchid-base.qcow2` symlink to the current versioned Orchid base image with Nix, Node.js, Go, PI coding agent, zsh, direnv, and common operator tools |
 | VM disk  | Thin qcow2 overlay backed by `orchid-base.qcow2` |
 | Auth     | `dev` / `dev`                  |
 
@@ -90,7 +90,7 @@ sudo just create-vm https://github.com/specture-system/specture --name my-dev
 sudo just destroy-vm addison-specture
 ```
 
-On first boot, cloud-init performs only VM-specific setup: setting the hostname, cloning the target repo, and wiring the login shell so interactive sessions auto-enter `nix develop` when the repo has a `flake.nix`. Nix itself and the common toolchain are already present in the shared base image. `just create-vm` waits for cloud-init to finish before returning when `sshpass` is available on the hypervisor host.
+On first boot, cloud-init performs only VM-specific setup: setting the hostname, cloning the target repo, and dropping a repo-local `.envrc` so `direnv` loads the flake when the checkout has a `flake.nix`. The shared base already provides Nix, zsh, the `robbyrussell` theme, `direnv`, and the common toolchain. `just create-vm` waits for cloud-init to finish before returning when `sshpass` is available on the hypervisor host.
 
 You can log in over the serial console or SSH with username `dev` and password `dev`.
 Use `orchid connect <vm-name>` from your laptop to resolve the current IP and open SSH without managing per-VM aliases.
@@ -107,6 +107,8 @@ Orchid uses a two-stage image pipeline:
    - Node.js
    - Go
    - PI coding agent
+   - zsh with the `robbyrussell` theme
+   - `direnv`
    - `git`, `curl`, `helix`, and `zellij`
 3. Per-VM overlay
    Created for each repo and used only for repo checkout, repo-specific closures, and transient build output.

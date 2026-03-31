@@ -62,6 +62,8 @@ packages:
   - curl
   - locales
   - xz-utils
+  - zsh
+  - direnv
 package_update: true
 write_files:
   - path: /etc/ssh/sshd_config.d/orchid.conf
@@ -94,7 +96,27 @@ write_files:
       export PATH="/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:\${PATH}"
       nix profile install nixpkgs#helix nixpkgs#zellij nixpkgs#nodejs nixpkgs#go
 
+      rm -rf /usr/local/share/oh-my-zsh
+      git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git /usr/local/share/oh-my-zsh
+
       NPM_CONFIG_PREFIX=/usr/local npm install -g @mariozechner/pi-coding-agent
+
+      usermod -s /usr/bin/zsh dev
+
+      cat > /home/dev/.zshenv <<'ORCHID_ZSHENV'
+      export PATH="/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:/usr/local/bin:${PATH}"
+      ORCHID_ZSHENV
+      chown dev:dev /home/dev/.zshenv
+
+      cat > /home/dev/.zshrc <<'ORCHID_ZSHRC'
+      export ZSH=/usr/local/share/oh-my-zsh
+      ZSH_THEME="robbyrussell"
+      plugins=(git)
+
+      source "${ZSH}/oh-my-zsh.sh"
+      eval "$(direnv hook zsh)"
+      ORCHID_ZSHRC
+      chown dev:dev /home/dev/.zshrc
 runcmd:
   - /usr/local/bin/orchid-bootstrap.sh
 EOF

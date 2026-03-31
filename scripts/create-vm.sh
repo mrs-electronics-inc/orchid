@@ -83,36 +83,25 @@ write_files:
         su - dev -c 'git clone ${REPO_URL} /home/dev/${REPO_NAME}'
       fi
 
-      cat > /usr/local/bin/orchid-dev-shell.sh <<'ORCHID_SHELL'
-      #!/usr/bin/env bash
-      set -euo pipefail
+      cat > /home/dev/.zprofile <<'ORCHID_ZPROFILE'
+      cd "/home/dev/${REPO_NAME}"
+      ORCHID_ZPROFILE
+      chown dev:dev /home/dev/.zprofile
 
-      repo_dir="__REPO_DIR__"
-
-      cd "\${repo_dir}"
-      export PATH="/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:/usr/local/bin:\${PATH}"
-
-      # Only auto-enter the flake shell for interactive login shells.
-      case \$- in
-        *i*) ;;
-        *) return 0 2>/dev/null || exit 0 ;;
-      esac
-
-      if [[ -n "\${IN_NIX_SHELL:-}" ]]; then
-        return 0 2>/dev/null || exit 0
+      if [[ ! -f "/home/dev/${REPO_NAME}/.envrc" ]]; then
+        cat > "/home/dev/${REPO_NAME}/.envrc" <<'ORCHID_ENVRC'
+      if [ -f flake.nix ]; then
+        use flake
+      fi
+      ORCHID_ENVRC
+        chown dev:dev "/home/dev/${REPO_NAME}/.envrc"
+        if [[ -d "/home/dev/${REPO_NAME}/.git" ]]; then
+          grep -qxF '.envrc' "/home/dev/${REPO_NAME}/.git/info/exclude" || \
+            printf '\n.envrc\n' >> "/home/dev/${REPO_NAME}/.git/info/exclude"
+        fi
       fi
 
-      if [[ -f flake.nix ]]; then
-        exec nix develop -c bash --noprofile --norc -i
-      fi
-      ORCHID_SHELL
-      sed -i 's|__REPO_DIR__|/home/dev/${REPO_NAME}|' /usr/local/bin/orchid-dev-shell.sh
-      chmod 0755 /usr/local/bin/orchid-dev-shell.sh
-
-      cat > /home/dev/.bash_profile <<'ORCHID_PROFILE'
-      . /usr/local/bin/orchid-dev-shell.sh
-      ORCHID_PROFILE
-      chown dev:dev /home/dev/.bash_profile
+      su - dev -c 'cd /home/dev/${REPO_NAME} && direnv allow'
 runcmd:
   - /usr/local/bin/orchid-bootstrap.sh
 EOF
