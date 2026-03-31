@@ -2,7 +2,7 @@
 
 _Because why not._
 
-Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Orchid keeps per-VM disks small by building a shared base image with the common toolchain already installed, then creating thin qcow2 overlays for each repo-specific VM. The shared base also gives `dev` a zsh shell with the `robbyrussell` theme, `direnv` for repo-local environments, and a default Codex config. VMs default to a `dev` user with password `dev`.
+Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Orchid keeps per-VM disks small by building a shared base image with the common toolchain already installed, then creating thin qcow2 overlays for each repo-specific VM. The shared base also gives `dev` a zsh shell with the `robbyrussell` theme, `direnv` for repo-local environments, and a default Codex config. VM login is key-based; password login is disabled in the guest.
 
 ## Requirements
 
@@ -16,7 +16,7 @@ Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Orchid
 | Base OS  | Debian 12 (`generic` qcow2)     |
 | Shared base | `orchid-base.qcow2` symlink to the current versioned Orchid base image with Nix, Node.js, Go, PI coding agent, Codex CLI, zsh, direnv, `fd`, `ripgrep`, default Codex config, and common operator tools |
 | VM disk  | Thin qcow2 overlay backed by `orchid-base.qcow2` |
-| Auth     | `dev` / `dev`                  |
+| Auth     | SSH key from `~/.config/orchid/config.toml` |
 
 ## VM Spec (per instance)
 
@@ -30,7 +30,7 @@ Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Orchid
 
 Run the following on the **hypervisor host**.
 
-`orchid` currently creates disks in the system libvirt storage pool at `/var/lib/libvirt/images` and talks to `qemu:///system`, so the setup and VM creation commands below should be run as `root`.
+`orchid` still creates disks in the system libvirt storage pool at `/var/lib/libvirt/images` and talks to `qemu:///system`, so the host-side setup/build commands below should be run with root privileges. `orchid create-vm` itself runs on your laptop and SSHes to the configured hypervisor.
 
 ### Create a shared workspace
 
@@ -77,23 +77,22 @@ sudo systemctl restart libvirtd
 
 ## Usage
 
-Point orchid at a Git repo URL. It derives the VM name and provisions a VM from the shared Orchid base image. By default, VM names will be prefixed by the username on the hypervisor. This avoids collisions between different developers' VMs.
+Point orchid at a Git repo URL. `orchid create-vm` runs on your laptop, talks to the configured hypervisor, derives the VM name, and provisions a VM from the shared Orchid base image. By default, VM names are prefixed by the local username so different developers do not collide.
 
 ```bash
-# Create a VM from the shared Orchid base image
-sudo just create-vm https://github.com/specture-system/specture
+orchid create-vm --identity-file ~/.ssh/id_ed25519 https://github.com/specture-system/specture
 
-# Override the VM name
-sudo just create-vm https://github.com/specture-system/specture --name my-dev
+orchid create-vm \
+  --identity-file ~/.ssh/id_ed25519 \
+  --name my-dev \
+  https://github.com/specture-system/specture
 
-# Remove a VM and its disk artifacts
 sudo just destroy-vm addison-specture
 ```
 
-On first boot, cloud-init performs only VM-specific setup: setting the hostname, cloning the target repo, and dropping a repo-local `.envrc` so `direnv` loads the flake when the checkout has a `flake.nix`. The shared base already provides Nix, zsh, the `robbyrussell` theme, `direnv`, and the common toolchain. `just create-vm` waits for cloud-init to finish before returning when `sshpass` is available on the hypervisor host.
+On first boot, cloud-init performs only VM-specific setup: setting the hostname, cloning the target repo, installing the authorized key, and dropping a repo-local `.envrc` so `direnv` loads the flake when the checkout has a `flake.nix`. The shared base already provides Nix, zsh, the `robbyrussell` theme, `direnv`, and the common toolchain.
 
-You can log in over the serial console or SSH with username `dev` and password `dev`.
-Use `orchid connect <vm-name>` from your laptop to resolve the current IP and open SSH without managing per-VM aliases.
+Use `orchid connect <vm-name>` from your laptop to resolve the current IP and open SSH through the configured hypervisor without managing per-VM aliases. Password login is disabled in the guest.
 
 ## Base Image Workflow
 
@@ -145,20 +144,26 @@ Configure the hypervisor once:
 orchid config set hypervisor cs02
 ```
 
-`ORCHID_HYPERVISOR` still overrides the config file for one-off commands. Orchid does not ship a default hypervisor host.
-
-Connect to a VM by name:
+Configure the SSH identity once:
 
 ```bash
-ORCHID_HYPERVISOR=<hypervisor-host> \
-orchid connect addison-specture
+orchid config set identity-file ~/.ssh/id_ed25519
 ```
 
-The config file lives at `~/.config/orchid/config.toml` and uses a simple TOML key:
+The config file lives at `~/.config/orchid/config.toml` and uses simple TOML keys:
 
 ```toml
 hypervisor = "cs02"
+identity_file = "/home/addison/.ssh/id_ed25519"
 ```
+
+One-off overrides still come from flags:
+
+```bash
+orchid connect --hypervisor cs02 --identity-file ~/.ssh/id_ed25519 addison-specture
+```
+
+If both `hypervisor` and `identity_file` are already set in `~/.config/orchid/config.toml`, the flags can be omitted.
 
 ## License
 

@@ -21,10 +21,6 @@ build:
     mkdir -p bin
     CGO_ENABLED=0 go build -o ./bin/orchid .
 
-# Create a new VM from a repo: just create-vm <repo-url> [--name <name>]
-create-vm +args:
-    ./scripts/create-vm.sh {{args}}
-
 # Remove a VM and its disk artifacts: sudo just destroy-vm <vm-name>
 destroy-vm vm_name:
     ./scripts/destroy-vm.sh {{vm_name}}

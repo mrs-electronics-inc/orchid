@@ -24,6 +24,8 @@ func Run(args []string) int {
 	switch args[0] {
 	case "connect":
 		return runConnect(args[1:])
+	case "create-vm":
+		return runCreateVM(args[1:])
 	case "config":
 		return runConfig(args[1:])
 	case "-h", "--help", "help":
@@ -39,20 +41,27 @@ func Run(args []string) int {
 func runConnect(args []string) int {
 	fs := flag.NewFlagSet("connect", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	user := fs.String("user", envOr("ORCHID_VM_USER", defaultSSHUser), "SSH user")
+	user := fs.String("user", defaultSSHUser, "SSH user")
+	hypervisorFlag := fs.String("hypervisor", "", "SSH host for the libvirt hypervisor")
+	identityFileFlag := fs.String("identity-file", "", "SSH private key used for guest login")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 
 	if fs.NArg() < 1 {
-		fmt.Fprintln(os.Stderr, "usage: orchid connect [--user USER] <vm-name> [-- <ssh-args...>]")
+		fmt.Fprintln(os.Stderr, "usage: orchid connect [--hypervisor HOST] [--identity-file PATH] [--user USER] <vm-name> [-- <ssh-args...>]")
 		return 2
 	}
 
 	vmName := fs.Arg(0)
 	remoteArgs := fs.Args()[1:]
 
-	hypervisor, err := resolveHypervisor()
+	hypervisor, err := resolveHypervisor(*hypervisorFlag)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	identity, err := resolveIdentityFile(*identityFileFlag)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -64,12 +73,12 @@ func runConnect(args []string) int {
 	}
 
 	fmt.Printf("Connecting to %s (%s)\n", vmName, ip)
-	return execSSH(hypervisor, ip, *user, remoteArgs)
+	return execSSH(hypervisor, ip, identity, *user, remoteArgs)
 }
 
 func usage() {
 	fmt.Fprintln(os.Stderr, "usage: orchid <command> [args]")
-	fmt.Fprintln(os.Stderr, "commands: connect, config")
+	fmt.Fprintln(os.Stderr, "commands: connect, create-vm, config")
 	os.Exit(2)
 }
 
@@ -93,12 +102,34 @@ func runConfig(args []string) int {
 
 func usageConfig() {
 	fmt.Fprintln(os.Stderr, "usage: orchid config set hypervisor <host>")
+	fmt.Fprintln(os.Stderr, "       orchid config set identity-file <path>")
 	os.Exit(2)
 }
 
 func runConfigSet(args []string) int {
-	if len(args) != 2 || args[0] != "hypervisor" {
+	if len(args) != 2 {
 		usageConfig()
+	}
+
+	var update func(*config) error
+	switch args[0] {
+	case "hypervisor":
+		update = func(cfg *config) error {
+			cfg.Hypervisor = args[1]
+			return nil
+		}
+	case "identity-file":
+		update = func(cfg *config) error {
+			cfg.IdentityFile = args[1]
+			return nil
+		}
+	default:
+		usageConfig()
+	}
+
+	if err := saveConfigUpdate(update); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
 	}
 
 	path, err := configPath()
@@ -106,12 +137,6 @@ func runConfigSet(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-
-	if err := writeConfig(path, config{Hypervisor: args[1]}); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
 	fmt.Printf("Wrote %s\n", path)
 	return 0
 }
@@ -213,12 +238,15 @@ func parseLeaseIP(output, mac string) string {
 	return ""
 }
 
-func execSSH(hypervisor, ip, user string, remoteArgs []string) int {
+func execSSH(hypervisor, ip, identityFile, user string, remoteArgs []string) int {
 	sshArgs := []string{
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
 		"-o", "ConnectTimeout=10",
 		"-o", fmt.Sprintf("ProxyCommand=ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -W %%h:%%p %s", hypervisor),
+	}
+	if identityFile != "" {
+		sshArgs = append(sshArgs, "-i", identityFile, "-o", "IdentitiesOnly=yes")
 	}
 
 	if len(remoteArgs) == 0 {
@@ -242,11 +270,4 @@ func execSSH(hypervisor, ip, user string, remoteArgs []string) int {
 	}
 
 	return 0
-}
-
-func envOr(name, fallback string) string {
-	if value := os.Getenv(name); value != "" {
-		return value
-	}
-	return fallback
 }

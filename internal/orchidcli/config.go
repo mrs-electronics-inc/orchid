@@ -12,14 +12,14 @@ import (
 )
 
 type config struct {
-	Hypervisor string `toml:"hypervisor"`
+	Hypervisor   string `toml:"hypervisor,omitempty"`
+	IdentityFile string `toml:"identity_file,omitempty"`
 }
 
-func resolveHypervisor() (string, error) {
-	if value := os.Getenv("ORCHID_HYPERVISOR"); value != "" {
-		return value, nil
+func resolveHypervisor(override string) (string, error) {
+	if override != "" {
+		return override, nil
 	}
-
 	cfg, path, err := loadConfig()
 	if err != nil {
 		return "", err
@@ -28,7 +28,23 @@ func resolveHypervisor() (string, error) {
 		return cfg.Hypervisor, nil
 	}
 
-	return "", fmt.Errorf("ORCHID_HYPERVISOR is required or set hypervisor = \"<host>\" in %s, or run `orchid config set hypervisor <host>`", path)
+	return "", fmt.Errorf("hypervisor is required: set hypervisor = \"<host>\" in %s, run `orchid config set hypervisor <host>`, or pass --hypervisor", path)
+}
+
+func resolveIdentityFile(override string) (string, error) {
+	if override != "" {
+		return override, nil
+	}
+
+	cfg, path, err := loadConfig()
+	if err != nil {
+		return "", err
+	}
+	if cfg.IdentityFile != "" {
+		return cfg.IdentityFile, nil
+	}
+
+	return "", fmt.Errorf("identity file is required: set identity_file = \"<path>\" in %s, run `orchid config set identity-file <path>`, or pass --identity-file", path)
 }
 
 func loadConfig() (config, string, error) {
@@ -60,9 +76,16 @@ func writeConfig(path string, cfg config) error {
 
 	var b strings.Builder
 	b.WriteString("# Orchid CLI configuration.\n")
-	b.WriteString("hypervisor = ")
-	b.WriteString(strconv.Quote(cfg.Hypervisor))
-	b.WriteString("\n")
+	if cfg.Hypervisor != "" {
+		b.WriteString("hypervisor = ")
+		b.WriteString(strconv.Quote(cfg.Hypervisor))
+		b.WriteString("\n")
+	}
+	if cfg.IdentityFile != "" {
+		b.WriteString("identity_file = ")
+		b.WriteString(strconv.Quote(cfg.IdentityFile))
+		b.WriteString("\n")
+	}
 
 	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
@@ -76,4 +99,28 @@ func configPath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(dir, "orchid", "config.toml"), nil
+}
+
+func loadCurrentConfig() (config, string, error) {
+	path, err := configPath()
+	if err != nil {
+		return config{}, "", err
+	}
+
+	cfg, _, err := loadConfig()
+	if err != nil {
+		return config{}, path, err
+	}
+	return cfg, path, nil
+}
+
+func saveConfigUpdate(update func(*config) error) error {
+	cfg, path, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	if err := update(&cfg); err != nil {
+		return err
+	}
+	return writeConfig(path, cfg)
 }
