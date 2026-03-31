@@ -67,7 +67,7 @@ sudo systemctl edit libvirtd
 
 ```ini
 [Service]
-TasksMax=infinity
+TasksMax=65536
 ```
 
 ```bash
