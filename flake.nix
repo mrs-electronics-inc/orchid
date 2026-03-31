@@ -21,8 +21,7 @@
             export HOME="$TMPDIR"
             export CGO_ENABLED=0
             export GOCACHE="$TMPDIR/go-cache"
-            export GOMODCACHE="$TMPDIR/go-mod-cache"
-            mkdir -p "$GOCACHE" "$GOMODCACHE"
+            mkdir -p "$GOCACHE"
             go build -trimpath -buildvcs=false -o orchid .
             runHook postBuild
           '';
