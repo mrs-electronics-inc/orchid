@@ -57,6 +57,24 @@ sudo just build-base
 
 `just setup` installs host dependencies and downloads the Debian 12 `generic` base image. `just build-base` creates a new versioned Orchid base image and refreshes `orchid-base.qcow2` to point at it.
 
+## Troubleshooting
+
+If `sudo just build-base` fails with `Host does not support any virtualization options` or `Unable to start event thread: Resource temporarily unavailable`, libvirtd is probably hitting a systemd task limit on the host. Increase the service limit and restart libvirtd:
+
+```bash
+sudo systemctl edit libvirtd
+```
+
+```ini
+[Service]
+TasksMax=infinity
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart libvirtd
+```
+
 ## Usage
 
 Point orchid at a Git repo URL. It derives the VM name and provisions a VM from the shared Orchid base image. By default, VM names will be prefixed by the username on the hypervisor. This avoids collisions between different developers' VMs.
