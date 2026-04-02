@@ -12,8 +12,10 @@ import (
 )
 
 const (
-	createVMRetrySleep    = 5 * time.Second
-	createVMRetryAttempts = 20
+	createVMRetrySleep     = 5 * time.Second
+	createVMRetryAttempts  = 20
+	createVMVerifyAttempts = 12
+	createVMVerifySleep    = 2 * time.Second
 )
 
 func (s *daemonJobStore) startCreateVM(req daemonCreateVMRequest) (*daemonJob, error) {
@@ -156,7 +158,8 @@ func runCreateVMJob(job *daemonJob, req daemonCreateVMRequest) {
 	}
 
 	job.update(daemonJobStateRunning, daemonJobStageWaitingForCloudInit, "verifying repo checkout", vmName, ip)
-	if err := verifyGuestRepoCheckout(ip, privateKeyPath, repoName); err != nil {
+	if err := waitForGuestRepoCheckout(ip, privateKeyPath, repoName, createVMVerifyAttempts, createVMVerifySleep); err != nil {
+		_ = destroyVM(vmName)
 		job.fail(daemonJobStageWaitingForCloudInit, "verifying repo checkout", err.Error())
 		return
 	}
@@ -204,6 +207,25 @@ func resolveSharedBaseImage() (string, error) {
 
 func verifyGuestRepoCheckout(ip, identityFile, repoName string) error {
 	return runSSHKeyShellCommand(ip, identityFile, fmt.Sprintf("test -d %s && test -f %s", shellQuote("/home/dev/"+repoName), shellQuote("/home/dev/"+repoName+"/.envrc")))
+}
+
+func waitForGuestRepoCheckout(ip, identityFile, repoName string, attempts int, sleep time.Duration) error {
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		if err := verifyGuestRepoCheckout(ip, identityFile, repoName); err == nil {
+			return nil
+		} else {
+			lastErr = err
+			fmt.Printf("  repo checkout not ready yet (%d/%d): %v\n", attempt, attempts, err)
+		}
+		if attempt < attempts {
+			time.Sleep(sleep)
+		}
+	}
+	if lastErr == nil {
+		return fmt.Errorf("repo checkout did not become ready")
+	}
+	return lastErr
 }
 
 func waitForDaemonVMIP(vmName string, attempts int, sleep time.Duration) (string, error) {
