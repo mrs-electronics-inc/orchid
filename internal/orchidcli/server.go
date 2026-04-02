@@ -330,6 +330,10 @@ func runServerProxy(args []string) int {
 
 	conn, err := net.Dial("unix", serverSocketPath)
 	if err != nil {
+		if errors.Is(err, os.ErrPermission) {
+			fmt.Fprintf(os.Stderr, "access denied connecting to %s; the SSH user on the hypervisor must be in the %s group\n", serverSocketPath, serverSocketGroup)
+			return 1
+		}
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}

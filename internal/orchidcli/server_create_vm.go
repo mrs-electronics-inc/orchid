@@ -78,7 +78,7 @@ func runCreateVMJob(job *daemonJob, req daemonCreateVMRequest) {
 		return
 	}
 
-	base, err := runLocalCommand("readlink", "-f", "/var/lib/libvirt/images/orchid-base.qcow2")
+	base, err := resolveSharedBaseImage()
 	if err != nil {
 		job.fail(daemonJobStageValidatingRequest, "resolving base image", err.Error())
 		return
@@ -169,6 +169,31 @@ func runLocalCommand(args ...string) (string, error) {
 		return "", fmt.Errorf("%s failed: %s", strings.Join(args, " "), trimmed)
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+func resolveSharedBaseImage() (string, error) {
+	info, err := os.Lstat(serverBaseLink)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("shared base image %s is missing; run `sudo orchid server install` or `sudo orchid server build-base` on the hypervisor", serverBaseLink)
+		}
+		return "", fmt.Errorf("checking %s: %w", serverBaseLink, err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		return "", fmt.Errorf("refusing to use non-symlink base image at %s; run `sudo orchid server install` or `sudo orchid server build-base` on the hypervisor", serverBaseLink)
+	}
+	if _, err := os.Stat(serverBaseLink); err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("shared base image %s points to a missing target; run `sudo orchid server install` or `sudo orchid server build-base` on the hypervisor", serverBaseLink)
+		}
+		return "", fmt.Errorf("checking %s target: %w", serverBaseLink, err)
+	}
+
+	base, err := filepath.EvalSymlinks(serverBaseLink)
+	if err != nil {
+		return "", fmt.Errorf("resolving %s: %w", serverBaseLink, err)
+	}
+	return base, nil
 }
 
 func waitForDaemonVMIP(vmName string, attempts int, sleep time.Duration) (string, error) {
