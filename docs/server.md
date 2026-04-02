@@ -4,16 +4,14 @@ Orchid expects a Linux hypervisor host with KVM/QEMU, libvirt, a `default` NAT n
 
 ## Image Layout
 
-| Resource | Value |
-| -------- | ----- |
-| Base OS | Debian 12 (`generic` qcow2) |
+| Resource    | Value                                                                                                                                                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Base OS     | Debian 12 (`generic` qcow2)                                                                                                                                                                             |
 | Shared base | `orchid-base.qcow2` symlink to the current versioned Orchid base image with Nix, Node.js, Go, PI coding agent, Codex CLI, zsh, direnv, `fd`, `ripgrep`, default Codex config, and common operator tools |
-| VM disk | Thin qcow2 overlay backed by `orchid-base.qcow2` |
-| Auth | SSH key from `~/.config/orchid/config.toml` |
+| VM disk     | Thin qcow2 overlay backed by `orchid-base.qcow2`                                                                                                                                                        |
+| Auth        | SSH key from `~/.config/orchid/config.toml`                                                                                                                                                             |
 
 ## Host Setup
-
-Run the following on the hypervisor host with root privileges.
 
 Install the required host packages:
 
@@ -21,11 +19,7 @@ Install the required host packages:
 sudo apt install -y virtinst cloud-image-utils genisoimage qemu-utils sshpass wget
 ```
 
-Make sure the host has KVM/QEMU, libvirt, `qemu-img`, `virt-install`, `cloud-localds`, `ssh`, and `sshpass` available. `orchid server install` uses those tools directly and no longer requires a repo checkout on the hypervisor.
-
 ### Install the daemon
-
-Install the CLI with the same command used in the README, then register or refresh the checked-in systemd service with `sudo`:
 
 ```bash
 go install github.com/mrs-electronics-inc/orchid@latest
@@ -34,15 +28,11 @@ sudo orchid server install
 
 That command installs `/usr/local/bin/orchid`, downloads the Debian 12 base image if needed, builds the shared Orchid base image if it is missing, writes `orchid.service` to `/etc/systemd/system`, reloads systemd, enables the service, and restarts it if it is already running.
 
-If a Go-installed Orchid binary exists for the invoking user, `server install` re-execs into it automatically before doing the install work.
-
 Run `orchid server status` after install to confirm the daemon is enabled and active.
 
-The daemon listens on `/run/orchid/orchid.sock`, and laptop-side commands reach it through `ssh <hypervisor> orchid server proxy`.
+The daemon listens on `/run/orchid/orchid.sock`, and client-side commands reach it through `ssh <hypervisor> orchid server proxy`.
 
 Use `orchid server status` on the host to confirm the service state, `orchid server build-base` to refresh the shared base image later, and `orchid server run` if you want to run the daemon in the foreground during local debugging.
-
-Once the daemon is installed, `orchid list`, `orchid create-vm`, and `orchid destroy-vm` use it for VM discovery and lifecycle work.
 
 ## Troubleshooting
 

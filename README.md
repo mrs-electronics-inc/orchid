@@ -6,17 +6,15 @@ Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Orchid
 
 ## VM Spec (per instance)
 
-| Resource | Value |
-| -------- | ----- |
-| vCPU     | 1     |
-| RAM      | 2 GB  |
+| Resource | Value                                                              |
+| -------- | ------------------------------------------------------------------ |
+| vCPU     | 1                                                                  |
+| RAM      | 2 GB                                                               |
 | Disk     | Thin qcow2 overlay; physical usage grows with repo-specific writes |
 
 ## Server Docs
 
 Host setup, base image maintenance, and troubleshooting live in [docs/server.md](docs/server.md).
-
-The hypervisor now runs an Orchid daemon managed with `orchid server install`, `orchid server status`, `orchid server build-base`, `orchid server run`, and `orchid server proxy`. The `orchid list`, `orchid create-vm`, and `orchid destroy-vm` commands talk to that daemon over SSH.
 
 ## Install
 
