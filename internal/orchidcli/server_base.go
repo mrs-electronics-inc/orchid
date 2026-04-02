@@ -13,9 +13,11 @@ import (
 )
 
 const (
-	serverImageDir        = "/var/lib/libvirt/images"
-	serverDebianBaseImage = serverImageDir + "/debian-12-base.qcow2"
-	serverDebianBaseURL   = "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2"
+	serverImageDir             = "/var/lib/libvirt/images"
+	serverDebianBaseImage      = serverImageDir + "/debian-12-base.qcow2"
+	serverDebianBaseURL        = "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2"
+	baseBuilderIPRetrySleep    = 5 * time.Second
+	baseBuilderIPRetryAttempts = 120
 )
 
 const orchidBaseBootstrapScript = `#!/usr/bin/env bash
@@ -157,7 +159,7 @@ func buildOrchidBaseImage() error {
 	}
 
 	fmt.Println("Waiting for base builder VM to get an IP via guest agent or DHCP...")
-	ip, err := waitForDaemonVMIP(buildVM, 20, 5)
+	ip, err := waitForDaemonVMIP(buildVM, baseBuilderIPRetryAttempts, baseBuilderIPRetrySleep)
 	if err != nil {
 		return fmt.Errorf("waiting for base builder IP: %w", err)
 	}
