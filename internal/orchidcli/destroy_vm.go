@@ -1,4 +1,4 @@
-package orchidcli
+package cli
 
 import (
 	"flag"
@@ -15,7 +15,7 @@ func runDestroyVM(args []string) int {
 	}
 
 	if fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: orchid destroy-vm [--hypervisor HOST] <vm-name>")
+		fmt.Fprintln(os.Stderr, "usage: orchid vm destroy [--hypervisor HOST] <vm-name>")
 		return 2
 	}
 

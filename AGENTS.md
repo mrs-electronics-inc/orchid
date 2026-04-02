@@ -9,6 +9,7 @@ This file is the local memory for future agents working in this repo. Keep it sh
 - Run a shell syntax check on modified bash scripts before handing off.
 - Preserve the shared-base model: common tooling belongs in `orchid-base.qcow2`, not in per-VM bootstrap logic.
 - Use conventional commit messages for every Git commit, for example `feat: ...`, `fix: ...`, or `docs: ...`.
+- Use conventional PR titles for published branches, and keep them terse and descriptive, for example `feat: improve CLI`.
 
 ## Ask First
 

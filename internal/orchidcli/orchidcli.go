@@ -1,7 +1,8 @@
-package orchidcli
+package cli
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -17,30 +18,20 @@ const (
 )
 
 func Run(args []string) int {
-	if len(args) < 1 {
-		printHelp()
-		return 0
-	}
+	cmd := newRootCommand()
+	cmd.SetArgs(args)
+	cmd.SetOut(os.Stdout)
+	cmd.SetErr(os.Stderr)
+	cmd.SilenceErrors = true
+	cmd.SilenceUsage = true
 
-	switch args[0] {
-	case "connect":
-		return runConnect(args[1:])
-	case "create-vm":
-		return runCreateVM(args[1:])
-	case "destroy-vm":
-		return runDestroyVM(args[1:])
-	case "list":
-		return runList(args[1:])
-	case "server":
-		return runServer(args[1:])
-	case "config":
-		return runConfig(args[1:])
-	case "-h", "--help", "help":
-		printHelp()
-		return 0
-	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", args[0])
-		usage()
+	if err := cmd.Execute(); err != nil {
+		var exitErr exitCodeError
+		if errors.As(err, &exitErr) {
+			return exitErr.code
+		}
+		fmt.Fprintln(os.Stderr, err)
+		return 1
 	}
 
 	return 0
@@ -57,7 +48,7 @@ func runConnect(args []string) int {
 	}
 
 	if fs.NArg() < 1 {
-		fmt.Fprintln(os.Stderr, "usage: orchid connect [--hypervisor HOST] [--identity-file PATH] [--user USER] <vm-name> [-- <ssh-args...>]")
+		fmt.Fprintln(os.Stderr, "usage: orchid vm connect [--hypervisor HOST] [--identity-file PATH] [--user USER] <vm-name> [-- <ssh-args...>]")
 		return 2
 	}
 
@@ -86,7 +77,7 @@ func runConnect(args []string) int {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, "usage: orchid <command> [args]")
-	fmt.Fprintln(os.Stderr, "commands: connect, create-vm, destroy-vm, list, server, config")
+	fmt.Fprintln(os.Stderr, "commands: config, server, vm")
 	os.Exit(2)
 }
 
@@ -96,19 +87,15 @@ func printHelp() {
 	fmt.Fprintln(os.Stdout, "It keeps per-VM disks small by using a shared Orchid base image with the")
 	fmt.Fprintln(os.Stdout, "common toolchain already installed, then creates thin qcow2 overlays for")
 	fmt.Fprintln(os.Stdout, "each repo-specific VM. A daemon runs on the configured hypervisor and the")
-	fmt.Fprintln(os.Stdout, "CLI talks to it over SSH for listing, creating, connecting to, and destroying")
-	fmt.Fprintln(os.Stdout, "VMs.")
+	fmt.Fprintln(os.Stdout, "CLI talks to it over SSH for VM lifecycle operations.")
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "Usage:")
 	fmt.Fprintln(os.Stdout, "  orchid <command> [args]")
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "Commands:")
-	fmt.Fprintln(os.Stdout, "  connect     Connect to a VM over SSH")
-	fmt.Fprintln(os.Stdout, "  create-vm   Create a new VM for a repo")
-	fmt.Fprintln(os.Stdout, "  destroy-vm  Remove a VM and its disk artifacts")
-	fmt.Fprintln(os.Stdout, "  list        List VMs on the hypervisor")
-	fmt.Fprintln(os.Stdout, "  server      Manage the Orchid daemon on the hypervisor")
 	fmt.Fprintln(os.Stdout, "  config      Set the local Orchid configuration")
+	fmt.Fprintln(os.Stdout, "  server      Manage the Orchid daemon on the hypervisor")
+	fmt.Fprintln(os.Stdout, "  vm          Connect to, create, destroy, or list VMs")
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "See docs/server.md for hypervisor setup and the README for common workflows.")
 }

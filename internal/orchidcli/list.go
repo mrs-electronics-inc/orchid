@@ -1,4 +1,4 @@
-package orchidcli
+package cli
 
 import (
 	"flag"
@@ -15,7 +15,7 @@ func runList(args []string) int {
 		return 2
 	}
 	if fs.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "usage: orchid list [--hypervisor HOST]")
+		fmt.Fprintln(os.Stderr, "usage: orchid vm list [--hypervisor HOST]")
 		return 2
 	}
 

@@ -1,4 +1,4 @@
-package orchidcli
+package cli
 
 import (
 	"flag"
@@ -17,7 +17,7 @@ func runCreateVM(args []string) int {
 	}
 
 	if fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: orchid create-vm [--identity-file <path>] [--hypervisor <host>] [--name VM] <repo-url>")
+		fmt.Fprintln(os.Stderr, "usage: orchid vm create [--identity-file <path>] [--hypervisor <host>] [--name VM] <repo-url>")
 		return 2
 	}
 
@@ -82,6 +82,6 @@ func runCreateVM(args []string) int {
 	}
 
 	fmt.Printf("\nVM '%s' is ready!\n", status.VMName)
-	fmt.Printf("  orchid connect %s\n\n", status.VMName)
+	fmt.Printf("  orchid vm connect %s\n\n", status.VMName)
 	return 0
 }
