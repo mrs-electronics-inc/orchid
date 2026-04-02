@@ -15,8 +15,8 @@ import (
 const (
 	createVMRetrySleep     = 5 * time.Second
 	createVMRetryAttempts  = 20
-	createVMVerifyAttempts = 12
-	createVMVerifySleep    = 2 * time.Second
+	createVMVerifyAttempts = 20
+	createVMVerifySleep    = 5 * time.Second
 )
 
 func (s *daemonJobStore) startCreateVM(req daemonCreateVMRequest) (*daemonJob, error) {
@@ -218,6 +218,22 @@ func verifyGuestRepoCheckout(ip, identityFile, repoName string) error {
 	return runSSHKeyShellCommand(ip, identityFile, fmt.Sprintf("test -d %s && test -f %s", shellQuote("/home/dev/"+repoName), shellQuote("/home/dev/"+repoName+"/.envrc")))
 }
 
+func guestRepoCheckoutState(ip, identityFile, repoName string) (string, error) {
+	shellCommand := fmt.Sprintf(`
+repo=%s
+repo_dir=missing
+envrc=missing
+git_dir=missing
+flake=missing
+[ -d "$repo" ] && repo_dir=present
+[ -f "$repo/.envrc" ] && envrc=present
+[ -d "$repo/.git" ] && git_dir=present
+[ -f "$repo/flake.nix" ] && flake=present
+printf 'repo_dir=%%s envrc=%%s git=%%s flake=%%s\n' "$repo_dir" "$envrc" "$git_dir" "$flake"
+`, shellQuote("/home/dev/"+repoName))
+	return runSSHKeyCommandOutput(ip, identityFile, "sh", "-lc", shellCommand)
+}
+
 func warmGuestRepoDevShell(ip, identityFile, repoName string) error {
 	return runSSHKeyShellCommand(ip, identityFile, fmt.Sprintf("cd %s && if [ -f flake.nix ]; then nix develop --command true; fi", shellQuote("/home/dev/"+repoName)))
 }
@@ -229,7 +245,12 @@ func waitForGuestRepoCheckout(ip, identityFile, repoName string, attempts int, s
 			return nil
 		} else {
 			lastErr = err
-			fmt.Printf("  repo checkout not ready yet (%d/%d): %v\n", attempt, attempts, err)
+			if status, statusErr := guestRepoCheckoutState(ip, identityFile, repoName); statusErr == nil {
+				fmt.Printf("  repo checkout not ready yet (%d/%d): %s\n", attempt, attempts, status)
+				lastErr = fmt.Errorf("repo checkout not ready: %s", status)
+			} else {
+				fmt.Printf("  repo checkout not ready yet (%d/%d): %v\n", attempt, attempts, err)
+			}
 		}
 		if attempt < attempts {
 			time.Sleep(sleep)

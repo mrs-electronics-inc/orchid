@@ -322,6 +322,11 @@ func waitForSSHKey(ip, identityFile string, attempts int, sleep time.Duration) e
 }
 
 func runSSHKeyCommand(ip, identityFile string, remoteArgs ...string) error {
+	_, err := runSSHKeyCommandOutput(ip, identityFile, remoteArgs...)
+	return err
+}
+
+func runSSHKeyCommandOutput(ip, identityFile string, remoteArgs ...string) (string, error) {
 	args := sshKeyArgs(ip, identityFile, remoteArgs...)
 	cmd := exec.Command("ssh", args...)
 	output, err := cmd.CombinedOutput()
@@ -330,11 +335,11 @@ func runSSHKeyCommand(ip, identityFile string, remoteArgs ...string) error {
 		command := strings.Join(remoteArgs, " ")
 		log.Printf("ssh to %s running %q failed: %s", ip, command, trimmed)
 		if trimmed == "" {
-			return fmt.Errorf("ssh to %s running %q failed: %w", ip, command, err)
+			return "", fmt.Errorf("ssh to %s running %q failed: %w", ip, command, err)
 		}
-		return fmt.Errorf("ssh to %s running %q failed: %s", ip, command, trimmed)
+		return "", fmt.Errorf("ssh to %s running %q failed: %s", ip, command, trimmed)
 	}
-	return nil
+	return strings.TrimSpace(string(output)), nil
 }
 
 func runSSHKeyShellCommand(ip, identityFile, shellCommand string) error {
@@ -345,6 +350,7 @@ func sshKeyArgs(ip, identityFile string, remoteArgs ...string) []string {
 	args := []string{
 		"-o", "BatchMode=yes",
 		"-o", "ConnectTimeout=5",
+		"-o", "LogLevel=ERROR",
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
 	}
