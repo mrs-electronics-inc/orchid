@@ -42,11 +42,11 @@ sudo just build-base
 
 ### Install the daemon
 
-Install the CLI with the same command used in the README, then register the checked-in systemd service:
+Install the CLI with the same command used in the README, then register the checked-in systemd service with `sudo`:
 
 ```bash
 go install github.com/mrs-electronics-inc/orchid@latest
-orchid server install
+sudo orchid server install
 ```
 
 That command installs `/usr/local/bin/orchid`, writes `orchid.service` to `/etc/systemd/system`, reloads systemd, and enables the service. If `orchid` is not on `PATH` after `go install`, use the binary from `$(go env GOPATH)/bin` or your `GOBIN`.
