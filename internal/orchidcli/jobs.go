@@ -1,4 +1,4 @@
-package orchidcli
+package cli
 
 const (
 	daemonJobStateQueued    = "queued"
