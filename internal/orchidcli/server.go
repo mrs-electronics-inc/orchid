@@ -89,6 +89,11 @@ func serveOrchidDaemon() error {
 	}
 	defer listener.Close()
 	defer os.Remove(serverSocketPath)
+	// The SSH proxy runs as the logged-in user on the hypervisor, so the socket
+	// has to allow non-root clients to connect.
+	if err := os.Chmod(serverSocketPath, 0o666); err != nil {
+		return fmt.Errorf("setting %s permissions: %w", serverSocketPath, err)
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/health", handleHealth)
