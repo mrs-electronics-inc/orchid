@@ -73,6 +73,8 @@ func buildCreateVMUserData(vmName, repoName, repoHost, repoURL, publicKey, priva
 	b.WriteString("        User git\n")
 	b.WriteString("        IdentitiesOnly yes\n")
 	b.WriteString("        IdentityFile ~/.ssh/id_orchid\n")
+	b.WriteString("        StrictHostKeyChecking accept-new\n")
+	b.WriteString("        UserKnownHostsFile ~/.ssh/known_hosts\n")
 	b.WriteString("  - path: /home/dev/.zprofile\n")
 	b.WriteString("    permissions: '0644'\n")
 	b.WriteString("    owner: dev:dev\n")

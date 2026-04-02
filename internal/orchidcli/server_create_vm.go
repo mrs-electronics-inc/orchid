@@ -155,6 +155,12 @@ func runCreateVMJob(job *daemonJob, req daemonCreateVMRequest) {
 		return
 	}
 
+	job.update(daemonJobStateRunning, daemonJobStageWaitingForCloudInit, "verifying repo checkout", vmName, ip)
+	if err := verifyGuestRepoCheckout(ip, privateKeyPath, repoName); err != nil {
+		job.fail(daemonJobStageWaitingForCloudInit, "verifying repo checkout", err.Error())
+		return
+	}
+
 	job.update(daemonJobStateSucceeded, daemonJobStageReady, "VM is ready", vmName, ip)
 }
 
@@ -194,6 +200,10 @@ func resolveSharedBaseImage() (string, error) {
 		return "", fmt.Errorf("resolving %s: %w", serverBaseLink, err)
 	}
 	return base, nil
+}
+
+func verifyGuestRepoCheckout(ip, identityFile, repoName string) error {
+	return runSSHKeyShellCommand(ip, identityFile, fmt.Sprintf("test -d %s && test -f %s", shellQuote("/home/dev/"+repoName), shellQuote("/home/dev/"+repoName+"/.envrc")))
 }
 
 func waitForDaemonVMIP(vmName string, attempts int, sleep time.Duration) (string, error) {
