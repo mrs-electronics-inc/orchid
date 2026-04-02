@@ -1,6 +1,7 @@
 package orchidcli
 
 import (
+	"encoding/xml"
 	"fmt"
 	"strings"
 )
@@ -38,7 +39,7 @@ func setOrchidDomainRole(domain, role string) error {
 }
 
 func domainIsOrchidVM(domain string) (bool, error) {
-	output, err := runLocalCommand("virsh", "-c", "qemu:///system", "dumpxml", domain)
+	output, err := domainXML(domain)
 	if err != nil {
 		return false, err
 	}
@@ -55,9 +56,65 @@ func domainIsOrchidVM(domain string) (bool, error) {
 	return false, nil
 }
 
-func domainHasOrchidRole(xml, role string) bool {
-	return strings.Contains(xml, "<"+orchidMetadataRoleKey+">"+role+"</"+orchidMetadataRoleKey+">") ||
-		strings.Contains(xml, "<"+orchidMetadataRoleKey+" xmlns=\""+orchidMetadataURI+"\">"+role+"</"+orchidMetadataRoleKey+">")
+func domainHasOrchidRole(xmlText, role string) bool {
+	decoder := xml.NewDecoder(strings.NewReader(xmlText))
+	for {
+		tok, err := decoder.Token()
+		if err != nil {
+			return false
+		}
+
+		start, ok := tok.(xml.StartElement)
+		if !ok || start.Name.Local != orchidMetadataRoleKey || !hasOrchidMetadataNamespace(start) {
+			continue
+		}
+
+		var content strings.Builder
+		for {
+			tok, err := decoder.Token()
+			if err != nil {
+				return false
+			}
+
+			switch t := tok.(type) {
+			case xml.CharData:
+				content.WriteString(string(t))
+			case xml.EndElement:
+				if t.Name.Local == orchidMetadataRoleKey {
+					return strings.TrimSpace(content.String()) == role
+				}
+			}
+		}
+	}
+}
+
+func domainXML(domain string) (string, error) {
+	output, err := runLocalCommand("virsh", "-c", "qemu:///system", "dumpxml", "--inactive", domain)
+	if err == nil {
+		return output, nil
+	}
+
+	altOutput, altErr := runLocalCommand("virsh", "-c", "qemu:///system", "dumpxml", domain)
+	if altErr == nil {
+		return altOutput, nil
+	}
+
+	return "", fmt.Errorf("dumpxml for %s failed: inactive view: %v; active view: %v", domain, err, altErr)
+}
+
+func hasOrchidMetadataNamespace(start xml.StartElement) bool {
+	if start.Name.Space == orchidMetadataURI {
+		return true
+	}
+	for _, attr := range start.Attr {
+		if attr.Name.Space == "xmlns" && attr.Value == orchidMetadataURI {
+			return true
+		}
+		if attr.Name.Space == "" && attr.Name.Local == "xmlns" && attr.Value == orchidMetadataURI {
+			return true
+		}
+	}
+	return false
 }
 
 func isLegacyOrchidVM(domain, xml string) bool {
