@@ -18,7 +18,8 @@ const (
 
 func Run(args []string) int {
 	if len(args) < 1 {
-		usage()
+		printHelp()
+		return 0
 	}
 
 	switch args[0] {
@@ -26,12 +27,17 @@ func Run(args []string) int {
 		return runConnect(args[1:])
 	case "create-vm":
 		return runCreateVM(args[1:])
+	case "destroy-vm":
+		return runDestroyVM(args[1:])
 	case "list":
 		return runList(args[1:])
+	case "server":
+		return runServer(args[1:])
 	case "config":
 		return runConfig(args[1:])
 	case "-h", "--help", "help":
-		usage()
+		printHelp()
+		return 0
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", args[0])
 		usage()
@@ -68,7 +74,7 @@ func runConnect(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	ip, err := resolveIP(hypervisor, vmName)
+	ip, err := fetchDaemonVMIP(hypervisor, vmName)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -80,8 +86,31 @@ func runConnect(args []string) int {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, "usage: orchid <command> [args]")
-	fmt.Fprintln(os.Stderr, "commands: connect, create-vm, list, config")
+	fmt.Fprintln(os.Stderr, "commands: connect, create-vm, destroy-vm, list, server, config")
 	os.Exit(2)
+}
+
+func printHelp() {
+	fmt.Fprintln(os.Stdout, "orchid manages disposable Debian 12 VMs for coding agents.")
+	fmt.Fprintln(os.Stdout, "")
+	fmt.Fprintln(os.Stdout, "It keeps per-VM disks small by using a shared Orchid base image with the")
+	fmt.Fprintln(os.Stdout, "common toolchain already installed, then creates thin qcow2 overlays for")
+	fmt.Fprintln(os.Stdout, "each repo-specific VM. A daemon runs on the configured hypervisor and the")
+	fmt.Fprintln(os.Stdout, "CLI talks to it over SSH for listing, creating, connecting to, and destroying")
+	fmt.Fprintln(os.Stdout, "VMs.")
+	fmt.Fprintln(os.Stdout, "")
+	fmt.Fprintln(os.Stdout, "Usage:")
+	fmt.Fprintln(os.Stdout, "  orchid <command> [args]")
+	fmt.Fprintln(os.Stdout, "")
+	fmt.Fprintln(os.Stdout, "Commands:")
+	fmt.Fprintln(os.Stdout, "  connect     Connect to a VM over SSH")
+	fmt.Fprintln(os.Stdout, "  create-vm   Create a new VM for a repo")
+	fmt.Fprintln(os.Stdout, "  destroy-vm  Remove a VM and its disk artifacts")
+	fmt.Fprintln(os.Stdout, "  list        List VMs on the hypervisor")
+	fmt.Fprintln(os.Stdout, "  server      Manage the Orchid daemon on the hypervisor")
+	fmt.Fprintln(os.Stdout, "  config      Set the local Orchid configuration")
+	fmt.Fprintln(os.Stdout, "")
+	fmt.Fprintln(os.Stdout, "See docs/server.md for hypervisor setup and the README for common workflows.")
 }
 
 func runConfig(args []string) int {
@@ -259,6 +288,7 @@ func execSSH(hypervisor, ip, identityFile, user string, remoteArgs []string) int
 	sshArgs = append(sshArgs, remoteArgs...)
 
 	cmd := exec.Command("ssh", sshArgs...)
+	cmd.Env = envWithOverride("TERM", "xterm-256color")
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -272,4 +302,24 @@ func execSSH(hypervisor, ip, identityFile, user string, remoteArgs []string) int
 	}
 
 	return 0
+}
+
+func envWithOverride(key, value string) []string {
+	prefix := key + "="
+	env := make([]string, 0, len(os.Environ())+1)
+	replaced := false
+	for _, entry := range os.Environ() {
+		if strings.HasPrefix(entry, prefix) {
+			if !replaced {
+				env = append(env, prefix+value)
+				replaced = true
+			}
+			continue
+		}
+		env = append(env, entry)
+	}
+	if !replaced {
+		env = append(env, prefix+value)
+	}
+	return env
 }

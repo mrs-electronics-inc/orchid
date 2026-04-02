@@ -6,15 +6,15 @@ Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Orchid
 
 ## VM Spec (per instance)
 
-| Resource | Value |
-| -------- | ----- |
-| vCPU     | 1     |
-| RAM      | 2 GB  |
+| Resource | Value                                                              |
+| -------- | ------------------------------------------------------------------ |
+| vCPU     | 1                                                                  |
+| RAM      | 2 GB                                                               |
 | Disk     | Thin qcow2 overlay; physical usage grows with repo-specific writes |
 
 ## Server Docs
 
-Host setup, base image maintenance, and troubleshooting live in [docs/server.md](docs/server.md).
+Host setup, base image maintenance, and troubleshooting live in [docs/server.md](docs/server.md). The SSH user that proxies to the hypervisor daemon must be in the `orchid` group.
 
 ## Install
 
@@ -47,7 +47,7 @@ identity_file = "<path-to-identity>"
 
 ## Create Virtual Machine
 
-`orchid create-vm` runs on your laptop, talks to the configured hypervisor, derives the VM name, and provisions a VM from the shared Orchid base image. By default, VM names are prefixed by the local username so different developers do not collide.
+`orchid create-vm` runs on your laptop, talks to the configured hypervisor daemon, derives the VM name, and submits a job to provision a VM from the shared Orchid base image. By default, VM names are prefixed by the local username so different developers do not collide.
 
 ```bash
 orchid create-vm <repo-url>
@@ -55,7 +55,11 @@ orchid create-vm <repo-url>
 orchid create-vm --name <vm-name> <repo-url>
 ```
 
+The CLI prints job stage transitions while the daemon creates the disk, writes cloud-init seed data, starts the VM, waits for IP/SSH/cloud-init, verifies the repo checkout, warms the flake dev shell with `nix develop` on the hypervisor, and then prints `orchid connect <vm-name>`. `orchid connect` forces `TERM=xterm-256color` so the guest uses a standard terminal type.
+
 On first boot, cloud-init performs only VM-specific setup: setting the hostname, cloning the target repo, installing the authorized key, and dropping a repo-local `.envrc` so `direnv` loads the flake when the checkout has a `flake.nix`.
+
+Use `orchid destroy-vm <vm-name>` to remove the VM and its disk artifacts.
 
 ## Connect
 

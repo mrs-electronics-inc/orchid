@@ -4,45 +4,45 @@ Orchid expects a Linux hypervisor host with KVM/QEMU, libvirt, a `default` NAT n
 
 ## Image Layout
 
-| Resource | Value |
-| -------- | ----- |
-| Base OS | Debian 12 (`generic` qcow2) |
+| Resource    | Value                                                                                                                                                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Base OS     | Debian 12 (`generic` qcow2)                                                                                                                                                                             |
 | Shared base | `orchid-base.qcow2` symlink to the current versioned Orchid base image with Nix, Node.js, Go, PI coding agent, Codex CLI, zsh, direnv, `fd`, `ripgrep`, default Codex config, and common operator tools |
-| VM disk | Thin qcow2 overlay backed by `orchid-base.qcow2` |
-| Auth | SSH key from `~/.config/orchid/config.toml` |
+| VM disk     | Thin qcow2 overlay backed by `orchid-base.qcow2`                                                                                                                                                        |
+| Auth        | SSH key from `~/.config/orchid/config.toml`                                                                                                                                                             |
 
 ## Host Setup
 
-Run the following on the hypervisor host with root privileges.
-
-### Create a shared workspace
+Install the required host packages:
 
 ```bash
-sudo groupadd --system orchid
-sudo usermod -aG orchid "$USER"
-sudo mkdir -p /srv/orchid
-sudo chgrp -R orchid /srv/orchid
-sudo chmod -R 2775 /srv/orchid
-newgrp orchid
+sudo apt install -y virtinst cloud-image-utils genisoimage qemu-utils sshpass wget
 ```
 
-Add any future users to the `orchid` group so they can manage VMs in the shared workspace.
-
-### Clone and set up
+### Install the daemon
 
 ```bash
-git clone https://github.com/mrs-electronics-inc/orchid.git /srv/orchid
-git config --global --add safe.directory /srv/orchid
-cd /srv/orchid
-sudo just setup
-sudo just build-base
+sudo env GOBIN=/usr/local/bin go install github.com/mrs-electronics-inc/orchid@latest
+sudo orchid server install
 ```
 
-`just setup` installs host dependencies and downloads the Debian 12 `generic` base image. `just build-base` creates a new versioned Orchid base image and refreshes `orchid-base.qcow2` to point at it.
+That command installs the checked-in `orchid.service`, downloads the Debian 12 base image if needed, builds the shared Orchid base image if it is missing, reloads systemd, enables the service, and restarts it if it is already running.
+
+Run `orchid server status` after install to confirm the daemon is enabled and active.
+
+The daemon listens on `/run/orchid/orchid.sock`, and client-side commands reach it through `ssh <hypervisor> orchid server proxy`. Only users in the `orchid` group can connect to that socket, so add trusted hypervisor SSH users to the group:
+
+```bash
+sudo usermod -aG orchid <username>
+```
+
+Log out and back in after changing group membership.
+
+Use `orchid server status` on the host to confirm the service state, `orchid server build-base` to refresh the shared base image later, and `orchid server run` if you want to run the daemon in the foreground during local debugging.
 
 ## Troubleshooting
 
-If `sudo just build-base` fails with `Host does not support any virtualization options` or `Unable to start event thread: Resource temporarily unavailable`, libvirtd is probably hitting a systemd task limit on the host. Increase the service limit and restart libvirtd:
+If `sudo orchid server build-base` fails with `Host does not support any virtualization options` or `Unable to start event thread: Resource temporarily unavailable`, libvirtd is probably hitting a systemd task limit on the host. Increase the service limit and restart libvirtd:
 
 ```bash
 sudo systemctl edit libvirtd
@@ -65,10 +65,11 @@ Orchid uses a two-stage image pipeline:
 1. `debian-12-base.qcow2`
    Downloaded from Debian cloud images and kept pristine.
 2. `orchid-base.qcow2`
-   Built once from the Debian base and preloaded with:
+   Built from the Debian base and preloaded with:
    - Nix with flakes enabled
    - Node.js
    - Go
+   - qemu-guest-agent
    - PI coding agent
    - Codex CLI
    - zsh with the `robbyrussell` theme
@@ -83,5 +84,5 @@ This keeps common Nix store contents in the shared base layer so dozens of VMs d
 Rebuild the shared base image after changing the default toolchain:
 
 ```bash
-sudo just build-base
+sudo orchid server build-base
 ```

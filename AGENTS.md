@@ -8,6 +8,7 @@ This file is the local memory for future agents working in this repo. Keep it sh
 - Keep `README.md`, `justfile`, and the VM scripts in sync when changing the image flow.
 - Run a shell syntax check on modified bash scripts before handing off.
 - Preserve the shared-base model: common tooling belongs in `orchid-base.qcow2`, not in per-VM bootstrap logic.
+- Use conventional commit messages for every Git commit, for example `feat: ...`, `fix: ...`, or `docs: ...`.
 
 ## Ask First
 
@@ -23,5 +24,5 @@ This file is the local memory for future agents working in this repo. Keep it sh
 ## Long Term Memory
 
 - `orchid-base.qcow2` is a symlink to the current versioned shared base image.
-- `scripts/create-vm.sh` should stay light: repo clone, login-shell wiring, and VM-specific cloud-init only.
-- `scripts/build-base.sh` is the place for shared toolchain changes.
+- `orchid server build-base` is the place for shared toolchain changes.
+- `orchid server install` owns the shared base image, systemd unit, and service refresh path on the hypervisor.
