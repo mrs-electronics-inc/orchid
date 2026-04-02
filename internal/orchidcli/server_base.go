@@ -13,11 +13,13 @@ import (
 )
 
 const (
-	serverImageDir             = "/var/lib/libvirt/images"
-	serverDebianBaseImage      = serverImageDir + "/debian-12-base.qcow2"
-	serverDebianBaseURL        = "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2"
-	baseBuilderIPRetrySleep    = 5 * time.Second
-	baseBuilderIPRetryAttempts = 120
+	serverImageDir              = "/var/lib/libvirt/images"
+	serverDebianBaseImage       = serverImageDir + "/debian-12-base.qcow2"
+	serverDebianBaseURL         = "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2"
+	baseBuilderIPRetrySleep     = 5 * time.Second
+	baseBuilderIPRetryAttempts  = 20
+	baseBuilderSSHRetrySleep    = 5 * time.Second
+	baseBuilderSSHRetryAttempts = 60
 )
 
 const orchidBaseBootstrapScript = `#!/usr/bin/env bash
@@ -165,7 +167,7 @@ func buildOrchidBaseImage() error {
 	}
 
 	fmt.Println("Waiting for SSH to become available...")
-	if err := waitForSSHKey(ip, builderKeyPath, 20, 5); err != nil {
+	if err := waitForSSHKey(ip, builderKeyPath, baseBuilderSSHRetryAttempts, baseBuilderSSHRetrySleep); err != nil {
 		return fmt.Errorf("waiting for base builder SSH: %w", err)
 	}
 
@@ -302,9 +304,13 @@ func waitForSSHKey(ip, identityFile string, attempts int, sleep time.Duration) e
 	var lastErr error
 	for attempt := 1; attempt <= attempts; attempt++ {
 		if err := runSSHKeyCommand(ip, identityFile, "true"); err == nil {
+			if attempt > 1 {
+				fmt.Printf("  SSH to %s became available after %d attempt(s)\n", ip, attempt)
+			}
 			return nil
 		} else {
 			lastErr = err
+			fmt.Printf("  SSH to %s not ready yet (%d/%d): %v\n", ip, attempt, attempts, err)
 		}
 		if attempt < attempts {
 			time.Sleep(sleep)
