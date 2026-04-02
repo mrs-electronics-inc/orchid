@@ -30,7 +30,13 @@ That command installs the checked-in `orchid.service`, downloads the Debian 12 b
 
 Run `orchid server status` after install to confirm the daemon is enabled and active.
 
-The daemon listens on `/run/orchid/orchid.sock`, and client-side commands reach it through `ssh <hypervisor> orchid server proxy`.
+The daemon listens on `/run/orchid/orchid.sock`, and client-side commands reach it through `ssh <hypervisor> orchid server proxy`. Only users in the `orchid` group can connect to that socket, so add trusted hypervisor SSH users to the group:
+
+```bash
+sudo usermod -aG orchid <username>
+```
+
+Log out and back in after changing group membership.
 
 Use `orchid server status` on the host to confirm the service state, `orchid server build-base` to refresh the shared base image later, and `orchid server run` if you want to run the daemon in the foreground during local debugging.
 

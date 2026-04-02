@@ -12,16 +12,19 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
 const (
-	serverSocketPath = "/run/orchid/orchid.sock"
-	serverUnitName   = "orchid.service"
-	serverBaseLink   = "/var/lib/libvirt/images/orchid-base.qcow2"
+	serverSocketPath  = "/run/orchid/orchid.sock"
+	serverSocketGroup = "orchid"
+	serverUnitName    = "orchid.service"
+	serverBaseLink    = "/var/lib/libvirt/images/orchid-base.qcow2"
 )
 
 //go:embed systemd/orchid.service
@@ -86,9 +89,9 @@ func serveOrchidDaemon() error {
 	}
 	defer listener.Close()
 	defer os.Remove(serverSocketPath)
-	// The SSH proxy runs as the logged-in user on the hypervisor, so the socket
-	// has to allow non-root clients to connect.
-	if err := os.Chmod(serverSocketPath, 0o666); err != nil {
+	// The SSH proxy runs as trusted hypervisor users, so the socket is shared
+	// with the orchid group rather than made world-writable.
+	if err := setOrchidSocketPermissions(serverSocketPath); err != nil {
 		return fmt.Errorf("setting %s permissions: %w", serverSocketPath, err)
 	}
 
@@ -366,6 +369,11 @@ func runServerInstall(args []string) int {
 		return 1
 	}
 
+	if err := runCommandChecked("groupadd", "--system", "--force", serverSocketGroup); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+
 	if err := ensureBaseImagePresent(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -496,6 +504,26 @@ func runCommandOutput(args ...string) string {
 		return ""
 	}
 	return string(output)
+}
+
+func setOrchidSocketPermissions(path string) error {
+	group, err := user.LookupGroup(serverSocketGroup)
+	if err != nil {
+		return fmt.Errorf("looking up group %s: %w", serverSocketGroup, err)
+	}
+
+	gid, err := strconv.Atoi(group.Gid)
+	if err != nil {
+		return fmt.Errorf("parsing gid for %s: %w", serverSocketGroup, err)
+	}
+
+	if err := os.Chown(path, 0, gid); err != nil {
+		return fmt.Errorf("setting ownership for %s: %w", path, err)
+	}
+	if err := os.Chmod(path, 0o660); err != nil {
+		return fmt.Errorf("setting mode for %s: %w", path, err)
+	}
+	return nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
