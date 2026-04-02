@@ -8,6 +8,6 @@ build:
     mkdir -p bin
     go build -o ./bin/orchid .
 
-# Run the Orchid CLI locally, e.g. `just run -- --help`
+# Run the Orchid CLI locally, e.g. `just run list`
 run *args:
-    go run . {{args}}
+    sh -c 'if [ "$#" -gt 0 ]; then exec go run . "$@"; else go run . --help || true; fi' sh {{args}}
