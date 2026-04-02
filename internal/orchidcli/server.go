@@ -323,16 +323,16 @@ func runServerInstall(args []string) int {
 		usageServer()
 	}
 
+	if os.Geteuid() != 0 {
+		fmt.Fprintln(os.Stderr, "orchid server install must be run with sudo")
+		return 1
+	}
+
 	if err := ensureBaseImagePresent(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 
-	executable, err := os.Executable()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
 	unit, err := serverUnitFS.ReadFile("systemd/orchid.service")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -340,7 +340,7 @@ func runServerInstall(args []string) int {
 	}
 
 	unitPath := filepath.Join("/etc/systemd/system", serverUnitName)
-	if err := installFile(executable, serverBinaryPath, 0o755); err != nil {
+	if err := installBinary(serverBinaryPath); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -438,8 +438,23 @@ func runServerStatus(args []string) int {
 	return 0
 }
 
+func installBinary(dstPath string) error {
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	if sameFilePath(executable, dstPath) {
+		return nil
+	}
+	return installFile(executable, dstPath, 0o755)
+}
+
 func installFile(srcPath, dstPath string, mode os.FileMode) error {
 	return runCommandChecked("install", "-m", fmt.Sprintf("%04o", mode), srcPath, dstPath)
+}
+
+func sameFilePath(a, b string) bool {
+	return filepath.Clean(a) == filepath.Clean(b)
 }
 
 func runCommandChecked(args ...string) error {
