@@ -6,4 +6,8 @@ default:
 # Build the Orchid CLI
 build:
     mkdir -p bin
-    CGO_ENABLED=0 go build -o ./bin/orchid .
+    go build -o ./bin/orchid .
+
+# Run the Orchid CLI locally, e.g. `just run -- --help`
+run *args:
+    go run . {{args}}
