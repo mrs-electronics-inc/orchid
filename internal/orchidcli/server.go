@@ -353,8 +353,13 @@ func runServerInstall(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
+	// Restart here so an existing running service picks up the newly installed binary.
+	if err := runSudoCommand("systemctl", "restart", serverUnitName); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
 
-	fmt.Printf("Installed %s and enabled %s\n", serverBinaryPath, serverUnitName)
+	fmt.Printf("Installed %s and refreshed %s\n", serverBinaryPath, serverUnitName)
 	return 0
 }
 
