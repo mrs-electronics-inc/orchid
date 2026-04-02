@@ -156,7 +156,7 @@ func buildOrchidBaseImage() error {
 		return fmt.Errorf("tagging base build VM: %w", err)
 	}
 
-	fmt.Println("Waiting for base builder VM to get an IP...")
+	fmt.Println("Waiting for base builder VM to get an IP via guest agent or DHCP...")
 	ip, err := waitForDaemonVMIP(buildVM, 20, 5)
 	if err != nil {
 		return fmt.Errorf("waiting for base builder IP: %w", err)

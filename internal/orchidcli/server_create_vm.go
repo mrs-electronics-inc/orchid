@@ -176,9 +176,17 @@ func waitForDaemonVMIP(vmName string, attempts int, sleep time.Duration) (string
 	for attempt := 1; attempt <= attempts; attempt++ {
 		ip, err := resolveVMIP(vmName)
 		if err == nil && ip != "" {
+			if attempt > 1 {
+				fmt.Printf("  %s IP became available after %d attempt(s): %s\n", vmName, attempt, ip)
+			}
 			return ip, nil
 		}
 		lastErr = err
+		if err != nil {
+			fmt.Printf("  %s IP not ready yet (%d/%d): %v\n", vmName, attempt, attempts, err)
+		} else {
+			fmt.Printf("  %s IP not ready yet (%d/%d)\n", vmName, attempt, attempts)
+		}
 		if attempt < attempts {
 			time.Sleep(sleep)
 		}
