@@ -175,16 +175,16 @@ func resolveSharedBaseImage() (string, error) {
 	info, err := os.Lstat(serverBaseLink)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", fmt.Errorf("shared base image %s is missing; run `sudo orchid server install` or `sudo orchid server build-base` on the hypervisor", serverBaseLink)
+			return "", fmt.Errorf("shared base image %s is missing; run `sudo orchid server build-base` on the hypervisor", serverBaseLink)
 		}
 		return "", fmt.Errorf("checking %s: %w", serverBaseLink, err)
 	}
 	if info.Mode()&os.ModeSymlink == 0 {
-		return "", fmt.Errorf("refusing to use non-symlink base image at %s; run `sudo orchid server install` or `sudo orchid server build-base` on the hypervisor", serverBaseLink)
+		return "", fmt.Errorf("refusing to use non-symlink base image at %s; run `sudo orchid server build-base` on the hypervisor", serverBaseLink)
 	}
 	if _, err := os.Stat(serverBaseLink); err != nil {
 		if os.IsNotExist(err) {
-			return "", fmt.Errorf("shared base image %s points to a missing target; run `sudo orchid server install` or `sudo orchid server build-base` on the hypervisor", serverBaseLink)
+			return "", fmt.Errorf("shared base image %s points to a missing target; run `sudo orchid server build-base` on the hypervisor", serverBaseLink)
 		}
 		return "", fmt.Errorf("checking %s target: %w", serverBaseLink, err)
 	}
