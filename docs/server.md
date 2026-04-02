@@ -34,6 +34,8 @@ sudo orchid server install
 
 That command installs `/usr/local/bin/orchid`, downloads the Debian 12 base image if needed, builds the shared Orchid base image if it is missing, writes `orchid.service` to `/etc/systemd/system`, reloads systemd, enables the service, and restarts it if it is already running. If `orchid` is not on `PATH` after `go install`, use the binary from `$(go env GOPATH)/bin` or your `GOBIN`.
 
+Run `orchid server status` after install to confirm the daemon is enabled and active.
+
 The daemon listens on `/run/orchid/orchid.sock`, and laptop-side commands reach it through `ssh <hypervisor> orchid server proxy`.
 
 Use `orchid server status` on the host to confirm the service state, `orchid server build-base` to refresh the shared base image later, and `orchid server run` if you want to run the daemon in the foreground during local debugging.

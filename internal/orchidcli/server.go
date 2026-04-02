@@ -369,21 +369,22 @@ func runServerInstall(args []string) int {
 		return 1
 	}
 
-	if err := runSudoCommand("systemctl", "daemon-reload"); err != nil {
+	if err := runCommandChecked("systemctl", "daemon-reload"); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	if err := runSudoCommand("systemctl", "enable", "--now", serverUnitName); err != nil {
+	if err := runCommandChecked("systemctl", "enable", "--now", serverUnitName); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	// Restart here so an existing running service picks up the newly installed binary.
-	if err := runSudoCommand("systemctl", "restart", serverUnitName); err != nil {
+	if err := runCommandChecked("systemctl", "restart", serverUnitName); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 
-	fmt.Printf("Installed %s and refreshed %s\n", serverBinaryPath, serverUnitName)
+	fmt.Printf("Installed %s and refreshed %s.\n", serverBinaryPath, serverUnitName)
+	fmt.Println("Run `orchid server status` to confirm the daemon is active.")
 	return 0
 }
 
@@ -438,18 +439,18 @@ func runServerStatus(args []string) int {
 }
 
 func installFile(srcPath, dstPath string, mode os.FileMode) error {
-	return runSudoCommand("install", "-m", fmt.Sprintf("%04o", mode), srcPath, dstPath)
+	return runCommandChecked("install", "-m", fmt.Sprintf("%04o", mode), srcPath, dstPath)
 }
 
-func runSudoCommand(args ...string) error {
-	cmd := exec.Command("sudo", args...)
+func runCommandChecked(args ...string) error {
+	cmd := exec.Command(args[0], args[1:]...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		trimmed := strings.TrimSpace(string(output))
 		if trimmed == "" {
-			return fmt.Errorf("sudo %s failed: %w", strings.Join(args, " "), err)
+			return fmt.Errorf("%s failed: %w", strings.Join(args, " "), err)
 		}
-		return fmt.Errorf("sudo %s failed: %s", strings.Join(args, " "), trimmed)
+		return fmt.Errorf("%s failed: %s", strings.Join(args, " "), trimmed)
 	}
 	return nil
 }
