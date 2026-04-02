@@ -12,18 +12,15 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"os/user"
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
 const (
 	serverSocketPath = "/run/orchid/orchid.sock"
 	serverUnitName   = "orchid.service"
-	serverBinaryPath = "/usr/local/bin/orchid"
 	serverBaseLink   = "/var/lib/libvirt/images/orchid-base.qcow2"
 )
 
@@ -371,11 +368,6 @@ func runServerInstall(args []string) int {
 		return 1
 	}
 
-	if err := reexecGoInstalledBinary(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
 	if err := ensureBaseImagePresent(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -388,10 +380,6 @@ func runServerInstall(args []string) int {
 	}
 
 	unitPath := filepath.Join("/etc/systemd/system", serverUnitName)
-	if err := installBinary(serverBinaryPath); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
 
 	tmpUnit, err := os.CreateTemp("", "orchid-service-*.service")
 	if err != nil {
@@ -425,13 +413,13 @@ func runServerInstall(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	// Restart here so an existing running service picks up the newly installed binary.
+	// Restart here so an existing running service picks up the refreshed unit.
 	if err := runCommandChecked("systemctl", "restart", serverUnitName); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 
-	fmt.Printf("Installed %s and refreshed %s.\n", serverBinaryPath, serverUnitName)
+	fmt.Printf("Installed %s and refreshed it.\n", serverUnitName)
 	fmt.Println("Run `orchid server status` to confirm the daemon is active.")
 	return 0
 }
@@ -486,67 +474,8 @@ func runServerStatus(args []string) int {
 	return 0
 }
 
-func installBinary(dstPath string) error {
-	executable, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	if sameFilePath(executable, dstPath) {
-		return nil
-	}
-	return installFile(executable, dstPath, 0o755)
-}
-
-func reexecGoInstalledBinary() error {
-	preferred, err := goInstallBinaryPath()
-	if err != nil {
-		return err
-	}
-
-	current, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	if sameFilePath(current, preferred) {
-		return nil
-	}
-
-	args := append([]string{preferred}, os.Args[1:]...)
-	return syscall.Exec(preferred, args, os.Environ())
-}
-
-func goInstallBinaryPath() (string, error) {
-	// Prefer the user's Go-installed binary so server install can upgrade the
-	// system copy even when /usr/local/bin/orchid is still the active command.
-	sudoUser := os.Getenv("SUDO_USER")
-	if sudoUser == "" {
-		return "", fmt.Errorf("could not determine invoking user; run orchid server install with sudo")
-	}
-
-	u, err := user.Lookup(sudoUser)
-	if err != nil {
-		return "", fmt.Errorf("looking up %s: %w", sudoUser, err)
-	}
-	if u.HomeDir == "" {
-		return "", fmt.Errorf("looking up %s: missing home directory", sudoUser)
-	}
-
-	sourcePath := filepath.Join(u.HomeDir, "go", "bin", "orchid")
-	if _, err := os.Stat(sourcePath); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return "", fmt.Errorf("missing Go-installed orchid binary at %s; run go install github.com/mrs-electronics-inc/orchid@<version> first", sourcePath)
-		}
-		return "", fmt.Errorf("checking %s: %w", sourcePath, err)
-	}
-	return sourcePath, nil
-}
-
 func installFile(srcPath, dstPath string, mode os.FileMode) error {
 	return runCommandChecked("install", "-m", fmt.Sprintf("%04o", mode), srcPath, dstPath)
-}
-
-func sameFilePath(a, b string) bool {
-	return filepath.Clean(a) == filepath.Clean(b)
 }
 
 func runCommandChecked(args ...string) error {

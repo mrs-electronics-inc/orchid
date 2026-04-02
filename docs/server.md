@@ -22,11 +22,11 @@ sudo apt install -y virtinst cloud-image-utils genisoimage qemu-utils sshpass wg
 ### Install the daemon
 
 ```bash
-go install github.com/mrs-electronics-inc/orchid@latest
+sudo env GOBIN=/usr/local/bin go install github.com/mrs-electronics-inc/orchid@latest
 sudo orchid server install
 ```
 
-That command installs `/usr/local/bin/orchid`, downloads the Debian 12 base image if needed, builds the shared Orchid base image if it is missing, writes `orchid.service` to `/etc/systemd/system`, reloads systemd, enables the service, and restarts it if it is already running.
+That command installs the checked-in `orchid.service`, downloads the Debian 12 base image if needed, builds the shared Orchid base image if it is missing, reloads systemd, enables the service, and restarts it if it is already running. It expects `orchid` to already be installed in `/usr/local/bin`.
 
 Run `orchid server status` after install to confirm the daemon is enabled and active.
 
