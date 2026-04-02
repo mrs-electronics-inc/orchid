@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -179,6 +180,7 @@ func runLocalCommand(args ...string) (string, error) {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		trimmed := strings.TrimSpace(string(output))
+		log.Printf("command %q failed: %s", strings.Join(args, " "), trimmed)
 		if trimmed == "" {
 			return "", fmt.Errorf("%s failed: %w", strings.Join(args, " "), err)
 		}

@@ -1,9 +1,9 @@
 package orchidcli
 
 import (
-	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -324,15 +324,15 @@ func waitForSSHKey(ip, identityFile string, attempts int, sleep time.Duration) e
 func runSSHKeyCommand(ip, identityFile string, remoteArgs ...string) error {
 	args := sshKeyArgs(ip, identityFile, remoteArgs...)
 	cmd := exec.Command("ssh", args...)
-	var stderr bytes.Buffer
-	cmd.Stdout = io.Discard
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		trimmed := strings.TrimSpace(stderr.String())
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		trimmed := strings.TrimSpace(string(output))
+		command := strings.Join(remoteArgs, " ")
+		log.Printf("ssh to %s running %q failed: %s", ip, command, trimmed)
 		if trimmed == "" {
-			return err
+			return fmt.Errorf("ssh to %s running %q failed: %w", ip, command, err)
 		}
-		return fmt.Errorf("ssh to %s failed: %s", ip, trimmed)
+		return fmt.Errorf("ssh to %s running %q failed: %s", ip, command, trimmed)
 	}
 	return nil
 }

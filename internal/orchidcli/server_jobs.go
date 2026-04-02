@@ -2,6 +2,7 @@ package orchidcli
 
 import (
 	"fmt"
+	"log"
 	"sync"
 )
 
@@ -38,6 +39,7 @@ func (s *daemonJobStore) create(initial daemonJobStatus) *daemonJob {
 		},
 	}
 	s.jobs[jobID] = job
+	log.Printf("job %s created state=%s stage=%s vm=%s message=%q", jobID, job.status.State, job.status.Stage, job.status.VMName, job.status.Message)
 	return job
 }
 
@@ -75,6 +77,7 @@ func (j *daemonJob) update(state, stage, message, vmName, ip string) {
 	if state == daemonJobStateSucceeded {
 		j.status.Error = ""
 	}
+	log.Printf("job %s state=%s stage=%s vm=%s ip=%s message=%q", j.status.JobID, j.status.State, j.status.Stage, j.status.VMName, j.status.IP, j.status.Message)
 }
 
 func (j *daemonJob) fail(stage, message, errText string) {
@@ -88,4 +91,5 @@ func (j *daemonJob) fail(stage, message, errText string) {
 		j.status.Message = message
 	}
 	j.status.Error = errText
+	log.Printf("job %s failed state=%s stage=%s vm=%s ip=%s message=%q error=%q", j.status.JobID, j.status.State, j.status.Stage, j.status.VMName, j.status.IP, j.status.Message, j.status.Error)
 }
