@@ -22,6 +22,7 @@ const (
 	serverSocketPath = "/run/orchid/orchid.sock"
 	serverUnitName   = "orchid.service"
 	serverBinaryPath = "/usr/local/bin/orchid"
+	serverBaseLink   = "/var/lib/libvirt/images/orchid-base.qcow2"
 )
 
 //go:embed systemd/orchid.service
@@ -37,6 +38,8 @@ func runServer(args []string) int {
 	switch args[0] {
 	case "install":
 		return runServerInstall(args[1:])
+	case "build-base":
+		return runServerBuildBase(args[1:])
 	case "proxy":
 		return runServerProxy(args[1:])
 	case "run":
@@ -54,7 +57,7 @@ func runServer(args []string) int {
 }
 
 func usageServer() {
-	fmt.Fprintln(os.Stderr, "usage: orchid server <install|proxy|run|status>")
+	fmt.Fprintln(os.Stderr, "usage: orchid server <install|build-base|proxy|run|status>")
 	os.Exit(2)
 }
 
@@ -304,6 +307,11 @@ func runServerInstall(args []string) int {
 		usageServer()
 	}
 
+	if err := ensureBaseImagePresent(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+
 	executable, err := os.Executable()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -361,6 +369,38 @@ func runServerInstall(args []string) int {
 
 	fmt.Printf("Installed %s and refreshed %s\n", serverBinaryPath, serverUnitName)
 	return 0
+}
+
+func runServerBuildBase(args []string) int {
+	if len(args) != 0 {
+		usageServer()
+	}
+
+	if err := buildOrchidBaseImage(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
+}
+
+func ensureBaseImagePresent() error {
+	info, err := os.Lstat(serverBaseLink)
+	if err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			if _, err := os.Stat(serverBaseLink); err == nil {
+				return nil
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("checking %s: %w", serverBaseLink, err)
+			}
+			return buildOrchidBaseImage()
+		}
+		return fmt.Errorf("refusing to overwrite non-symlink base image at %s", serverBaseLink)
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("checking %s: %w", serverBaseLink, err)
+	}
+
+	return buildOrchidBaseImage()
 }
 
 func runServerStatus(args []string) int {
