@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,6 +26,8 @@ const (
 
 //go:embed systemd/orchid.service
 var serverUnitFS embed.FS
+
+var serverJobStore = newDaemonJobStore()
 
 func runServer(args []string) int {
 	if len(args) < 1 {
@@ -86,6 +89,7 @@ func serveOrchidDaemon() error {
 	mux.HandleFunc("/v1/health", handleHealth)
 	mux.HandleFunc("/v1/vms", handleVMs)
 	mux.HandleFunc("/v1/vms/", handleVMByName)
+	mux.HandleFunc("/v1/jobs/", handleJob)
 
 	server := &http.Server{
 		Handler:           mux,
@@ -126,9 +130,54 @@ func handleVMs(w http.ResponseWriter, r *http.Request) {
 			resp.VMs = append(resp.VMs, daemonVM{Name: vm.Name, State: vm.State})
 		}
 		writeJSON(w, http.StatusOK, resp)
+	case http.MethodPost:
+		var req daemonCreateVMRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("decoding create-vm request: %v", err))
+			return
+		}
+
+		job, err := serverJobStore.startCreateVM(req)
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		writeJSON(w, http.StatusAccepted, daemonCreateVMResponse{JobID: job.snapshot().JobID})
 	default:
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
+}
+
+func handleJob(w http.ResponseWriter, r *http.Request) {
+	if !strings.HasPrefix(r.URL.Path, "/v1/jobs/") {
+		writeJSONError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	jobID := strings.TrimPrefix(r.URL.Path, "/v1/jobs/")
+	if jobID == "" || strings.Contains(jobID, "/") {
+		writeJSONError(w, http.StatusNotFound, "not found")
+		return
+	}
+	jobID, err := url.PathUnescape(jobID)
+	if err != nil || jobID == "" || strings.Contains(jobID, "/") {
+		writeJSONError(w, http.StatusBadRequest, "invalid job id")
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	job, ok := serverJobStore.get(jobID)
+	if !ok {
+		writeJSONError(w, http.StatusNotFound, "job not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, job.snapshot())
 }
 
 func handleVMByName(w http.ResponseWriter, r *http.Request) {
@@ -141,6 +190,11 @@ func handleVMByName(w http.ResponseWriter, r *http.Request) {
 	name, suffix, found := strings.Cut(trimmed, "/")
 	if !found || suffix != "ip" || name == "" || strings.Contains(name, "/") {
 		writeJSONError(w, http.StatusNotFound, "not found")
+		return
+	}
+	name, err := url.PathUnescape(name)
+	if err != nil || name == "" || strings.Contains(name, "/") {
+		writeJSONError(w, http.StatusBadRequest, "invalid VM name")
 		return
 	}
 

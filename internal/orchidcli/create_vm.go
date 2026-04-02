@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -67,120 +66,60 @@ func runCreateVM(args []string) int {
 		return 1
 	}
 
-	repoHost := repoHostFromURL(repoURL)
-	cloneURL := repoSSHURL(repoURL)
-
-	tmpDir, err := os.MkdirTemp("", "orchid-create-vm-*")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+	req := daemonCreateVMRequest{
+		Name:       vmName,
+		RepoURL:    repoURL,
+		PublicKey:  publicKey,
+		PrivateKey: string(privateKey),
 	}
-	defer os.RemoveAll(tmpDir)
-
-	userDataPath := filepath.Join(tmpDir, "user-data")
-	metaDataPath := filepath.Join(tmpDir, "meta-data")
-	networkConfigPath := filepath.Join(tmpDir, "network-config")
-
-	if err := os.WriteFile(userDataPath, []byte(buildCreateVMUserData(vmName, repoName, repoHost, cloneURL, publicKey, string(privateKey))), 0o600); err != nil {
-		fmt.Fprintf(os.Stderr, "writing user-data: %v\n", err)
-		return 1
-	}
-	if err := os.WriteFile(metaDataPath, []byte(buildMetaData(vmName)), 0o600); err != nil {
-		fmt.Fprintf(os.Stderr, "writing meta-data: %v\n", err)
-		return 1
-	}
-	if err := os.WriteFile(networkConfigPath, []byte(defaultNetworkConfig()), 0o600); err != nil {
-		fmt.Fprintf(os.Stderr, "writing network-config: %v\n", err)
-		return 1
-	}
-
-	remoteTmpDir, err := runRemoteCommand(context.Background(), hypervisor, "mktemp", "-d", "/tmp/orchid-create-vm.XXXXXX")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	defer runRemoteCommand(context.Background(), hypervisor, "rm", "-rf", remoteTmpDir)
-
-	if err := copyFileToRemote(hypervisor, userDataPath, filepath.Join(remoteTmpDir, "user-data")); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	if err := copyFileToRemote(hypervisor, metaDataPath, filepath.Join(remoteTmpDir, "meta-data")); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	if err := copyFileToRemote(hypervisor, networkConfigPath, filepath.Join(remoteTmpDir, "network-config")); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
-	base, err := remoteReadlink(hypervisor, "/var/lib/libvirt/images/orchid-base.qcow2")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
-	virtType, err := runRemoteCommand(context.Background(), hypervisor, "sh", "-lc", "test -e /dev/kvm && echo kvm || echo qemu")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
-	vmDisk := "/var/lib/libvirt/images/" + vmName + ".qcow2"
-	seedISO := "/var/lib/libvirt/images/" + vmName + "-seed.iso"
 
 	fmt.Printf("Creating VM '%s' for %s...\n", vmName, repoURL)
-	if _, err := runRemoteCommand(context.Background(), hypervisor, "sudo", "qemu-img", "create", "-f", "qcow2", "-b", base, "-F", "qcow2", vmDisk); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	if _, err := runRemoteCommand(context.Background(), hypervisor, "sudo", "cloud-localds", "--network-config="+filepath.Join(remoteTmpDir, "network-config"), seedISO, filepath.Join(remoteTmpDir, "user-data"), filepath.Join(remoteTmpDir, "meta-data")); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	if _, err := runRemoteCommand(context.Background(), hypervisor, "sudo", "virt-install",
-		"--connect", "qemu:///system",
-		"--virt-type", virtType,
-		"--name", vmName,
-		"--memory", "2048",
-		"--vcpus", "1",
-		"--disk", "path="+vmDisk+",format=qcow2",
-		"--disk", "path="+seedISO+",device=cdrom",
-		"--security", "type=none",
-		"--os-variant", "debian12",
-		"--network", "network=default,model=virtio",
-		"--graphics", "none",
-		"--console", "pty,target_type=serial",
-		"--noautoconsole",
-		"--import",
-	); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
-	fmt.Println("Waiting for VM to get an IP...")
-	ip, err := waitForVMIP(hypervisor, vmName, 20, 5)
+	submit, err := submitDaemonCreateVM(hypervisor, req)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 
-	fmt.Println("Waiting for SSH to become available...")
-	if err := waitForGuestSSH(hypervisor, ip, defaultSSHUser, identityFile, 60, 2); err != nil {
+	status, err := waitForDaemonJob(hypervisor, submit.JobID)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 
-	fmt.Println("Waiting for cloud-init to finish...")
-	if err := waitForGuestCommand(hypervisor, ip, defaultSSHUser, identityFile, "sudo", "cloud-init", "status", "--wait"); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
-	fmt.Printf("\nVM '%s' is ready!\n", vmName)
-	fmt.Printf("  orchid connect %s\n\n", vmName)
-	fmt.Println("cloud-init completed.")
+	fmt.Printf("\nVM '%s' is ready!\n", status.VMName)
+	fmt.Printf("  orchid connect %s\n\n", status.VMName)
 	return 0
+}
+
+func waitForDaemonJob(hypervisor, jobID string) (daemonJobStatus, error) {
+	var last daemonJobStatus
+	for {
+		status, err := fetchDaemonJob(hypervisor, jobID)
+		if err != nil {
+			return daemonJobStatus{}, err
+		}
+
+		if status.Stage != "" && (status.Stage != last.Stage || status.Message != last.Message || status.State != last.State) {
+			if status.Message != "" {
+				fmt.Printf("%s: %s\n", status.Stage, status.Message)
+			} else {
+				fmt.Println(status.Stage)
+			}
+		}
+		last = status
+
+		switch status.State {
+		case daemonJobStateSucceeded:
+			return status, nil
+		case daemonJobStateFailed:
+			if status.Error != "" {
+				return daemonJobStatus{}, fmt.Errorf("%s", status.Error)
+			}
+			return daemonJobStatus{}, fmt.Errorf("job %s failed", jobID)
+		default:
+			time.Sleep(2 * time.Second)
+		}
+	}
 }
 
 func remoteReadlink(hypervisor, path string) (string, error) {

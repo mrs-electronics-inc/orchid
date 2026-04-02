@@ -70,7 +70,7 @@ func runConnect(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	ip, err := resolveIP(hypervisor, vmName)
+	ip, err := fetchDaemonVMIP(hypervisor, vmName)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
