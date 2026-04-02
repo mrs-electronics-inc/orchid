@@ -80,7 +80,7 @@ func runCreateVMJob(job *daemonJob, req daemonCreateVMRequest) {
 
 	base, err := resolveSharedBaseImage()
 	if err != nil {
-		job.fail(daemonJobStageValidatingRequest, "resolving base image", err.Error())
+		job.fail(daemonJobStageValidatingRequest, "checking shared base image", err.Error())
 		return
 	}
 
