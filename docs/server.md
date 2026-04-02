@@ -52,6 +52,8 @@ That command installs `/usr/local/bin/orchid`, writes `orchid.service` to `/etc/
 
 Use `orchid server status` on the host to confirm the service state, and `orchid server run` if you want to run the daemon in the foreground during local debugging.
 
+Once the daemon is installed, `orchid list` and `orchid create-vm` use it for VM discovery and lifecycle work.
+
 ## Troubleshooting
 
 If `sudo just build-base` fails with `Host does not support any virtualization options` or `Unable to start event thread: Resource temporarily unavailable`, libvirtd is probably hitting a systemd task limit on the host. Increase the service limit and restart libvirtd:
