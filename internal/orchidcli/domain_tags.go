@@ -22,13 +22,14 @@ func setOrchidDomainRole(domain, role string) error {
 		return fmt.Errorf("role is required")
 	}
 
+	metadata := fmt.Sprintf("<%s xmlns=\"%s\">%s</%s>", orchidMetadataRoleKey, orchidMetadataURI, role, orchidMetadataRoleKey)
 	_, err := runLocalCommand(
 		"virsh",
 		"-c", "qemu:///system",
 		"metadata", domain, orchidMetadataURI,
 		"--config",
 		"--key", orchidMetadataRoleKey,
-		"--set", role,
+		"--set", metadata,
 	)
 	if err != nil {
 		return fmt.Errorf("tagging %s as %s: %w", domain, role, err)
