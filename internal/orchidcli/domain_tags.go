@@ -56,7 +56,8 @@ func domainIsOrchidVM(domain string) (bool, error) {
 }
 
 func domainHasOrchidRole(xml, role string) bool {
-	return strings.Contains(xml, orchidMetadataURI) && strings.Contains(xml, "<"+orchidMetadataRoleKey+">"+role+"</"+orchidMetadataRoleKey+">")
+	return strings.Contains(xml, "<"+orchidMetadataRoleKey+">"+role+"</"+orchidMetadataRoleKey+">") ||
+		strings.Contains(xml, "<"+orchidMetadataRoleKey+" xmlns=\""+orchidMetadataURI+"\">"+role+"</"+orchidMetadataRoleKey+">")
 }
 
 func isLegacyOrchidVM(domain, xml string) bool {

@@ -250,18 +250,16 @@ func handleVMByName(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if _, err := runVirshCommand("dominfo", name); err != nil {
-			writeJSONError(w, http.StatusNotFound, "not found")
-			return
-		}
-		managed, err := domainIsOrchidVM(name)
-		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("checking %s metadata: %v", name, err))
-			return
-		}
-		if !managed {
-			writeJSONError(w, http.StatusNotFound, "not found")
-			return
+		if _, err := runVirshCommand("dominfo", name); err == nil {
+			managed, err := domainIsOrchidVM(name)
+			if err != nil {
+				writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("checking %s metadata: %v", name, err))
+				return
+			}
+			if !managed {
+				writeJSONError(w, http.StatusNotFound, "not found")
+				return
+			}
 		}
 
 		if err := destroyVM(name); err != nil {
