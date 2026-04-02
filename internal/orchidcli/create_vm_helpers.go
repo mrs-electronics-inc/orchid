@@ -77,12 +77,10 @@ func buildCreateVMUserData(vmName, repoName, repoHost, repoURL, publicKey, priva
 	b.WriteString("    permissions: '0644'\n")
 	b.WriteString("    owner: dev:dev\n")
 	b.WriteString("    content: |\n")
-	b.WriteString("      cd /home/dev/")
-	b.WriteString(repoName)
+	b.WriteString("      cd ")
+	b.WriteString(shellQuote("/home/dev/" + repoName))
 	b.WriteString("\n")
-	b.WriteString("  - path: /home/dev/")
-	b.WriteString(repoName)
-	b.WriteString("/.envrc\n")
+	b.WriteString("  - path: /home/dev/.orchid-envrc\n")
 	b.WriteString("    permissions: '0644'\n")
 	b.WriteString("    owner: dev:dev\n")
 	b.WriteString("    content: |\n")
@@ -92,11 +90,23 @@ func buildCreateVMUserData(vmName, repoName, repoHost, repoURL, publicKey, priva
 	b.WriteString("runcmd:\n")
 	b.WriteString("  - mkdir -p /home/dev/.ssh\n")
 	b.WriteString("  - chown -R dev:dev /home/dev/.ssh\n")
-	b.WriteString("  - su - dev -c 'cd /home/dev/")
-	b.WriteString(repoName)
-	b.WriteString(" && direnv allow' || true\n")
+	b.WriteString("  - su - dev -c \"git clone ")
+	b.WriteString(shellQuote(repoURL))
+	b.WriteString(" ")
+	b.WriteString(shellQuote("/home/dev/" + repoName))
+	b.WriteString("\"\n")
+	b.WriteString("  - mv /home/dev/.orchid-envrc ")
+	b.WriteString(shellQuote("/home/dev/" + repoName + "/.envrc"))
+	b.WriteString("\n")
+	b.WriteString("  - su - dev -c \"cd ")
+	b.WriteString(shellQuote("/home/dev/" + repoName))
+	b.WriteString(" && direnv allow\" || true\n")
 	b.WriteString("  - systemctl restart sshd\n")
 	return b.String()
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
 }
 
 func buildMetaData(vmName string) string {
