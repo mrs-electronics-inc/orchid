@@ -191,7 +191,7 @@ func handleVMByName(w http.ResponseWriter, r *http.Request) {
 
 	trimmed := strings.TrimPrefix(r.URL.Path, "/v1/vms/")
 	name, suffix, found := strings.Cut(trimmed, "/")
-	if !found || suffix != "ip" || name == "" || strings.Contains(name, "/") {
+	if name == "" || strings.Contains(name, "/") {
 		writeJSONError(w, http.StatusNotFound, "not found")
 		return
 	}
@@ -201,21 +201,37 @@ func handleVMByName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method != http.MethodGet {
+	switch r.Method {
+	case http.MethodGet:
+		if !found || suffix != "ip" {
+			writeJSONError(w, http.StatusNotFound, "not found")
+			return
+		}
+
+		ip, err := resolveVMIP(name)
+		if err != nil {
+			writeJSONError(w, http.StatusNotFound, err.Error())
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]string{
+			"vm_name": name,
+			"ip":      ip,
+		})
+	case http.MethodDelete:
+		if found {
+			writeJSONError(w, http.StatusNotFound, "not found")
+			return
+		}
+
+		if err := destroyVM(name); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	default:
 		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
 	}
-
-	ip, err := resolveVMIP(name)
-	if err != nil {
-		writeJSONError(w, http.StatusNotFound, err.Error())
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]string{
-		"vm_name": name,
-		"ip":      ip,
-	})
 }
 
 func runVirshCommand(args ...string) (string, error) {

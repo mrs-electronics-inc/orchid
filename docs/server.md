@@ -38,7 +38,7 @@ The daemon listens on `/run/orchid/orchid.sock`, and laptop-side commands reach 
 
 Use `orchid server status` on the host to confirm the service state, `orchid server build-base` to refresh the shared base image later, and `orchid server run` if you want to run the daemon in the foreground during local debugging.
 
-Once the daemon is installed, `orchid list` and `orchid create-vm` use it for VM discovery and lifecycle work.
+Once the daemon is installed, `orchid list`, `orchid create-vm`, and `orchid destroy-vm` use it for VM discovery and lifecycle work.
 
 ## Troubleshooting
 

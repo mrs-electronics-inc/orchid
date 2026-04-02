@@ -54,6 +54,10 @@ func submitDaemonCreateVM(hypervisor string, req daemonCreateVMRequest) (daemonC
 	return response, nil
 }
 
+func submitDaemonDestroyVM(hypervisor, vmName string) error {
+	return daemonJSONRequest(hypervisor, http.MethodDelete, "/v1/vms/"+url.PathEscape(vmName), nil, nil)
+}
+
 func fetchDaemonJob(hypervisor, jobID string) (daemonJobStatus, error) {
 	var response daemonJobStatus
 	if err := daemonJSONRequest(hypervisor, http.MethodGet, "/v1/jobs/"+url.PathEscape(jobID), nil, &response); err != nil {

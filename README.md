@@ -16,7 +16,7 @@ Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Orchid
 
 Host setup, base image maintenance, and troubleshooting live in [docs/server.md](docs/server.md).
 
-The hypervisor now runs an Orchid daemon managed with `orchid server install`, `orchid server status`, `orchid server build-base`, `orchid server run`, and `orchid server proxy`. The `orchid list` command talks to that daemon over SSH.
+The hypervisor now runs an Orchid daemon managed with `orchid server install`, `orchid server status`, `orchid server build-base`, `orchid server run`, and `orchid server proxy`. The `orchid list`, `orchid create-vm`, and `orchid destroy-vm` commands talk to that daemon over SSH.
 
 ## Install
 
@@ -60,6 +60,8 @@ orchid create-vm --name <vm-name> <repo-url>
 The CLI prints job stage transitions while the daemon creates the disk, writes cloud-init seed data, starts the VM, waits for IP/SSH/cloud-init, and then prints `orchid connect <vm-name>`.
 
 On first boot, cloud-init performs only VM-specific setup: setting the hostname, cloning the target repo, installing the authorized key, and dropping a repo-local `.envrc` so `direnv` loads the flake when the checkout has a `flake.nix`.
+
+Use `orchid destroy-vm <vm-name>` to remove the VM and its disk artifacts.
 
 ## Connect
 
