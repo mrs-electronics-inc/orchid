@@ -164,6 +164,13 @@ func runCreateVMJob(job *daemonJob, req daemonCreateVMRequest) {
 		return
 	}
 
+	job.update(daemonJobStateRunning, daemonJobStageWarmingDevShell, "warming dev shell", vmName, ip)
+	if err := warmGuestRepoDevShell(ip, privateKeyPath, repoName); err != nil {
+		_ = destroyVM(vmName)
+		job.fail(daemonJobStageWarmingDevShell, "warming dev shell", err.Error())
+		return
+	}
+
 	job.update(daemonJobStateSucceeded, daemonJobStageReady, "VM is ready", vmName, ip)
 }
 
@@ -207,6 +214,10 @@ func resolveSharedBaseImage() (string, error) {
 
 func verifyGuestRepoCheckout(ip, identityFile, repoName string) error {
 	return runSSHKeyShellCommand(ip, identityFile, fmt.Sprintf("test -d %s && test -f %s", shellQuote("/home/dev/"+repoName), shellQuote("/home/dev/"+repoName+"/.envrc")))
+}
+
+func warmGuestRepoDevShell(ip, identityFile, repoName string) error {
+	return runSSHKeyShellCommand(ip, identityFile, fmt.Sprintf("cd %s && if [ -f flake.nix ]; then nix develop --command true; fi", shellQuote("/home/dev/"+repoName)))
 }
 
 func waitForGuestRepoCheckout(ip, identityFile, repoName string, attempts int, sleep time.Duration) error {

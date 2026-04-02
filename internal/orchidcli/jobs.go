@@ -13,6 +13,7 @@ const (
 	daemonJobStageWaitingForIP        = "waiting_for_ip"
 	daemonJobStageWaitingForSSH       = "waiting_for_ssh"
 	daemonJobStageWaitingForCloudInit = "waiting_for_cloud_init"
+	daemonJobStageWarmingDevShell     = "warming_dev_shell"
 	daemonJobStageReady               = "ready"
 )
 
