@@ -26,7 +26,7 @@ sudo env GOBIN=/usr/local/bin go install github.com/mrs-electronics-inc/orchid@l
 sudo orchid server install
 ```
 
-That command installs the checked-in `orchid.service`, downloads the Debian 12 base image if needed, builds the shared Orchid base image if it is missing, reloads systemd, enables the service, and restarts it if it is already running. It expects `orchid` to already be installed in `/usr/local/bin`.
+That command installs the checked-in `orchid.service`, downloads the Debian 12 base image if needed, builds the shared Orchid base image if it is missing, reloads systemd, enables the service, and restarts it if it is already running.
 
 Run `orchid server status` after install to confirm the daemon is enabled and active.
 
