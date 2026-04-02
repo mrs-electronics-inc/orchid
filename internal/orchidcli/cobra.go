@@ -25,7 +25,38 @@ func newRootCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "orchid",
 		Short: "Orchid manages disposable Debian 12 VMs for coding agents.",
-		Long:  "Orchid keeps per-VM disks small by using a shared Orchid base image with the common toolchain already installed, then creates thin qcow2 overlays for each repo-specific VM.",
+		Long: `Orchid manages disposable Debian 12 VMs for coding agents.
+
+It keeps per-VM disks small by building a shared Orchid base image with the
+common toolchain already installed, then creating thin qcow2 overlays for each
+repo-specific VM.
+
+Command groups:
+  orchid config  Set local hypervisor and SSH identity settings
+  orchid server  Install and manage the daemon on the hypervisor
+  orchid vm      Create, connect to, list, and destroy VMs
+
+Typical flow:
+  orchid config set hypervisor <hypervisor-host>
+  orchid config set identity-file <path-to-identity>
+  orchid vm create <repo-url>
+  orchid vm connect <vm-name>
+`,
+		Example: `# Configure the local client once
+orchid config set hypervisor hypervisor.example
+orchid config set identity-file ~/.ssh/id_ed25519
+
+# Create and use a VM
+orchid vm create https://github.com/org/repo.git
+orchid vm connect dev-repo
+
+# Inspect or clean up
+orchid vm list
+orchid vm destroy dev-repo
+
+# Hypervisor-side maintenance
+orchid server status
+orchid server build-base`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
 		},
@@ -41,6 +72,11 @@ func newVMCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "vm",
 		Short: "Manage VM lifecycle commands",
+		Long:  "VM commands run from your laptop and talk to the hypervisor daemon over SSH.",
+		Example: `orchid vm create https://github.com/org/repo.git
+orchid vm connect dev-repo
+orchid vm list
+orchid vm destroy dev-repo`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
 		},
@@ -133,6 +169,7 @@ func newConfigCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
 		Short: "Set the local Orchid configuration",
+		Long:  "The config command stores the hypervisor host and SSH identity used by vm commands.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
 		},
@@ -157,6 +194,7 @@ func newServerCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "server",
 		Short: "Manage the Orchid daemon on the hypervisor",
+		Long:  "Server commands are for the hypervisor host: install the daemon, build the shared base image, or inspect service status.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
 		},
