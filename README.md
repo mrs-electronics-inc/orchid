@@ -14,7 +14,7 @@ Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Orchid
 
 ## Server Docs
 
-Host setup, base image maintenance, and troubleshooting live in [docs/server.md](docs/server.md).
+Host setup, base image maintenance, and troubleshooting live in [docs/server.md](docs/server.md). The SSH user that proxies to the hypervisor daemon must be in the `orchid` group.
 
 ## Install
 
