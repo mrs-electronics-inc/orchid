@@ -29,10 +29,12 @@ Install the CLI with the same command used in the README, then register or refre
 
 ```bash
 go install github.com/mrs-electronics-inc/orchid@latest
-sudo "$(go env GOPATH)/bin/orchid" server install
+sudo orchid server install
 ```
 
 That command installs `/usr/local/bin/orchid`, downloads the Debian 12 base image if needed, builds the shared Orchid base image if it is missing, writes `orchid.service` to `/etc/systemd/system`, reloads systemd, enables the service, and restarts it if it is already running.
+
+If a Go-installed Orchid binary exists for the invoking user, `server install` re-execs into it automatically before doing the install work.
 
 Run `orchid server status` after install to confirm the daemon is enabled and active.
 

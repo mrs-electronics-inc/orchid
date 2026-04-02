@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -329,6 +330,11 @@ func runServerInstall(args []string) int {
 		return 1
 	}
 
+	if err := reexecGoInstalledBinary(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+
 	if err := ensureBaseImagePresent(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -440,7 +446,7 @@ func runServerStatus(args []string) int {
 }
 
 func installBinary(dstPath string) error {
-	executable, err := goInstallBinaryPath()
+	executable, err := os.Executable()
 	if err != nil {
 		return err
 	}
@@ -448,6 +454,24 @@ func installBinary(dstPath string) error {
 		return nil
 	}
 	return installFile(executable, dstPath, 0o755)
+}
+
+func reexecGoInstalledBinary() error {
+	preferred, err := goInstallBinaryPath()
+	if err != nil {
+		return err
+	}
+
+	current, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	if sameFilePath(current, preferred) {
+		return nil
+	}
+
+	args := append([]string{preferred}, os.Args[1:]...)
+	return syscall.Exec(preferred, args, os.Environ())
 }
 
 func goInstallBinaryPath() (string, error) {
