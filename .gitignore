@@ -32,6 +32,9 @@ go.work.sum
 .env
 .envrc
 
+# Codex local state
+.codex
+
 # Editor/IDE
 # .idea/
 # .vscode/
