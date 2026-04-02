@@ -15,6 +15,12 @@ Orchid expects a Linux hypervisor host with KVM/QEMU, libvirt, a `default` NAT n
 
 Run the following on the hypervisor host with root privileges.
 
+Install the required host packages:
+
+```bash
+sudo apt install -y virtinst cloud-image-utils genisoimage qemu-utils sshpass wget
+```
+
 Make sure the host has KVM/QEMU, libvirt, `qemu-img`, `virt-install`, `cloud-localds`, `ssh`, and `sshpass` available. `orchid server install` uses those tools directly and no longer requires a repo checkout on the hypervisor.
 
 ### Install the daemon

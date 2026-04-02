@@ -24,5 +24,5 @@ This file is the local memory for future agents working in this repo. Keep it sh
 ## Long Term Memory
 
 - `orchid-base.qcow2` is a symlink to the current versioned shared base image.
-- `scripts/create-vm.sh` should stay light: repo clone, login-shell wiring, and VM-specific cloud-init only.
-- `scripts/build-base.sh` is the place for shared toolchain changes.
+- `orchid server build-base` is the place for shared toolchain changes.
+- `orchid server install` owns the shared base image, systemd unit, and service refresh path on the hypervisor.
