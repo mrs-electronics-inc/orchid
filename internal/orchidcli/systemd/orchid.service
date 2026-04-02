@@ -1,0 +1,13 @@
+[Unit]
+Description=Orchid daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/orchid server run
+RuntimeDirectory=orchid
+RuntimeDirectoryMode=0755
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
