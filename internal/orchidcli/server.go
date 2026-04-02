@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -439,7 +440,7 @@ func runServerStatus(args []string) int {
 }
 
 func installBinary(dstPath string) error {
-	executable, err := os.Executable()
+	executable, err := goInstallBinaryPath()
 	if err != nil {
 		return err
 	}
@@ -447,6 +448,32 @@ func installBinary(dstPath string) error {
 		return nil
 	}
 	return installFile(executable, dstPath, 0o755)
+}
+
+func goInstallBinaryPath() (string, error) {
+	// Prefer the user's Go-installed binary so server install can upgrade the
+	// system copy even when /usr/local/bin/orchid is still the active command.
+	sudoUser := os.Getenv("SUDO_USER")
+	if sudoUser == "" {
+		return "", fmt.Errorf("could not determine invoking user; run orchid server install with sudo")
+	}
+
+	u, err := user.Lookup(sudoUser)
+	if err != nil {
+		return "", fmt.Errorf("looking up %s: %w", sudoUser, err)
+	}
+	if u.HomeDir == "" {
+		return "", fmt.Errorf("looking up %s: missing home directory", sudoUser)
+	}
+
+	sourcePath := filepath.Join(u.HomeDir, "go", "bin", "orchid")
+	if _, err := os.Stat(sourcePath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("missing Go-installed orchid binary at %s; run go install github.com/mrs-electronics-inc/orchid@<version> first", sourcePath)
+		}
+		return "", fmt.Errorf("checking %s: %w", sourcePath, err)
+	}
+	return sourcePath, nil
 }
 
 func installFile(srcPath, dstPath string, mode os.FileMode) error {
