@@ -42,14 +42,14 @@ sudo just build-base
 
 ### Install the daemon
 
-After checking out the repo on the host, install the CLI with `go install .` and then register the checked-in systemd service:
+Install the CLI with the same command used in the README, then register the checked-in systemd service:
 
 ```bash
-go install .
-"$(go env GOPATH)/bin/orchid" server install
+go install github.com/mrs-electronics-inc/orchid@latest
+orchid server install
 ```
 
-That command installs `/usr/local/bin/orchid`, writes `orchid.service` to `/etc/systemd/system`, reloads systemd, and enables the service. If you set `GOBIN`, use that directory instead of `$(go env GOPATH)/bin`.
+That command installs `/usr/local/bin/orchid`, writes `orchid.service` to `/etc/systemd/system`, reloads systemd, and enables the service. If `orchid` is not on `PATH` after `go install`, use the binary from `$(go env GOPATH)/bin` or your `GOBIN`.
 
 The daemon listens on `/run/orchid/orchid.sock`, and laptop-side commands reach it through `ssh <hypervisor> orchid server proxy`.
 
