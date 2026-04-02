@@ -15,30 +15,7 @@ Orchid expects a Linux hypervisor host with KVM/QEMU, libvirt, a `default` NAT n
 
 Run the following on the hypervisor host with root privileges.
 
-### Create a shared workspace
-
-```bash
-sudo groupadd --system orchid
-sudo usermod -aG orchid "$USER"
-sudo mkdir -p /srv/orchid
-sudo chgrp -R orchid /srv/orchid
-sudo chmod -R 2775 /srv/orchid
-newgrp orchid
-```
-
-Add any future users to the `orchid` group so they can manage VMs in the shared workspace.
-
-### Clone and set up
-
-```bash
-git clone https://github.com/mrs-electronics-inc/orchid.git /srv/orchid
-git config --global --add safe.directory /srv/orchid
-cd /srv/orchid
-sudo just setup
-sudo just build-base
-```
-
-`just setup` installs host dependencies and downloads the Debian 12 `generic` base image. `just build-base` creates a new versioned Orchid base image and refreshes `orchid-base.qcow2` to point at it.
+Make sure the host has KVM/QEMU, libvirt, `qemu-img`, `virt-install`, `cloud-localds`, `ssh`, and `sshpass` available. `orchid server install` uses those tools directly and no longer requires a repo checkout on the hypervisor.
 
 ### Install the daemon
 
@@ -49,17 +26,17 @@ go install github.com/mrs-electronics-inc/orchid@latest
 sudo orchid server install
 ```
 
-That command installs `/usr/local/bin/orchid`, writes `orchid.service` to `/etc/systemd/system`, reloads systemd, enables the service, and restarts it if it is already running. If `orchid` is not on `PATH` after `go install`, use the binary from `$(go env GOPATH)/bin` or your `GOBIN`.
+That command installs `/usr/local/bin/orchid`, downloads the Debian 12 base image if needed, builds the shared Orchid base image if it is missing, writes `orchid.service` to `/etc/systemd/system`, reloads systemd, enables the service, and restarts it if it is already running. If `orchid` is not on `PATH` after `go install`, use the binary from `$(go env GOPATH)/bin` or your `GOBIN`.
 
 The daemon listens on `/run/orchid/orchid.sock`, and laptop-side commands reach it through `ssh <hypervisor> orchid server proxy`.
 
-Use `orchid server status` on the host to confirm the service state, and `orchid server run` if you want to run the daemon in the foreground during local debugging.
+Use `orchid server status` on the host to confirm the service state, `orchid server build-base` to refresh the shared base image later, and `orchid server run` if you want to run the daemon in the foreground during local debugging.
 
 Once the daemon is installed, `orchid list` and `orchid create-vm` use it for VM discovery and lifecycle work.
 
 ## Troubleshooting
 
-If `sudo just build-base` fails with `Host does not support any virtualization options` or `Unable to start event thread: Resource temporarily unavailable`, libvirtd is probably hitting a systemd task limit on the host. Increase the service limit and restart libvirtd:
+If `sudo orchid server build-base` fails with `Host does not support any virtualization options` or `Unable to start event thread: Resource temporarily unavailable`, libvirtd is probably hitting a systemd task limit on the host. Increase the service limit and restart libvirtd:
 
 ```bash
 sudo systemctl edit libvirtd
@@ -82,7 +59,7 @@ Orchid uses a two-stage image pipeline:
 1. `debian-12-base.qcow2`
    Downloaded from Debian cloud images and kept pristine.
 2. `orchid-base.qcow2`
-   Built once from the Debian base and preloaded with:
+   Built from the Debian base and preloaded with:
    - Nix with flakes enabled
    - Node.js
    - Go
@@ -100,5 +77,5 @@ This keeps common Nix store contents in the shared base layer so dozens of VMs d
 Rebuild the shared base image after changing the default toolchain:
 
 ```bash
-sudo just build-base
+sudo orchid server build-base
 ```
