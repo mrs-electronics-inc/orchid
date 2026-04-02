@@ -82,6 +82,6 @@ func runCreateVM(args []string) int {
 	}
 
 	fmt.Printf("\nVM '%s' is ready!\n", status.VMName)
-	fmt.Printf("  orchid connect %s\n\n", status.VMName)
+	fmt.Printf("  orchid vm connect %s\n\n", status.VMName)
 	return 0
 }

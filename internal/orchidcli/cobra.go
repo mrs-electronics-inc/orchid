@@ -211,8 +211,8 @@ func newServerLeafCommand(name, short string) *cobra.Command {
 	return &cobra.Command{
 		Use:   name,
 		Short: short,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			return exitCode(runServer([]string{name}))
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return exitCode(runServer(append([]string{name}, args...)))
 		},
 	}
 }
