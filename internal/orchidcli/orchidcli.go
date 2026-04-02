@@ -18,7 +18,8 @@ const (
 
 func Run(args []string) int {
 	if len(args) < 1 {
-		usage()
+		printHelp()
+		return 0
 	}
 
 	switch args[0] {
@@ -35,7 +36,8 @@ func Run(args []string) int {
 	case "config":
 		return runConfig(args[1:])
 	case "-h", "--help", "help":
-		usage()
+		printHelp()
+		return 0
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", args[0])
 		usage()
@@ -86,6 +88,29 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "usage: orchid <command> [args]")
 	fmt.Fprintln(os.Stderr, "commands: connect, create-vm, destroy-vm, list, server, config")
 	os.Exit(2)
+}
+
+func printHelp() {
+	fmt.Fprintln(os.Stdout, "orchid manages disposable Debian 12 VMs for coding agents.")
+	fmt.Fprintln(os.Stdout, "")
+	fmt.Fprintln(os.Stdout, "It keeps per-VM disks small by using a shared Orchid base image with the")
+	fmt.Fprintln(os.Stdout, "common toolchain already installed, then creates thin qcow2 overlays for")
+	fmt.Fprintln(os.Stdout, "each repo-specific VM. A daemon runs on the configured hypervisor and the")
+	fmt.Fprintln(os.Stdout, "CLI talks to it over SSH for listing, creating, connecting to, and destroying")
+	fmt.Fprintln(os.Stdout, "VMs.")
+	fmt.Fprintln(os.Stdout, "")
+	fmt.Fprintln(os.Stdout, "Usage:")
+	fmt.Fprintln(os.Stdout, "  orchid <command> [args]")
+	fmt.Fprintln(os.Stdout, "")
+	fmt.Fprintln(os.Stdout, "Commands:")
+	fmt.Fprintln(os.Stdout, "  connect     Connect to a VM over SSH")
+	fmt.Fprintln(os.Stdout, "  create-vm   Create a new VM for a repo")
+	fmt.Fprintln(os.Stdout, "  destroy-vm  Remove a VM and its disk artifacts")
+	fmt.Fprintln(os.Stdout, "  list        List VMs on the hypervisor")
+	fmt.Fprintln(os.Stdout, "  server      Manage the Orchid daemon on the hypervisor")
+	fmt.Fprintln(os.Stdout, "  config      Set the local Orchid configuration")
+	fmt.Fprintln(os.Stdout, "")
+	fmt.Fprintln(os.Stdout, "See docs/server.md for hypervisor setup and the README for common workflows.")
 }
 
 func runConfig(args []string) int {
