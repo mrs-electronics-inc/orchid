@@ -231,7 +231,7 @@ flake=missing
 [ -f "$repo/flake.nix" ] && flake=present
 printf 'repo_dir=%%s envrc=%%s git=%%s flake=%%s\n' "$repo_dir" "$envrc" "$git_dir" "$flake"
 `, shellQuote("/home/dev/"+repoName))
-	return runSSHKeyCommandOutput(ip, identityFile, "sh", "-lc", shellCommand)
+	return runSSHKeyCommandOutput(ip, identityFile, "sh", "-lc", shellQuote(shellCommand))
 }
 
 func warmGuestRepoDevShell(ip, identityFile, repoName string) error {

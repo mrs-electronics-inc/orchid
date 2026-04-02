@@ -343,7 +343,7 @@ func runSSHKeyCommandOutput(ip, identityFile string, remoteArgs ...string) (stri
 }
 
 func runSSHKeyShellCommand(ip, identityFile, shellCommand string) error {
-	return runSSHKeyCommand(ip, identityFile, "sh", "-lc", shellCommand)
+	return runSSHKeyCommand(ip, identityFile, "sh", "-lc", shellQuote(shellCommand))
 }
 
 func sshKeyArgs(ip, identityFile string, remoteArgs ...string) []string {
