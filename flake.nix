@@ -10,28 +10,12 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        orchid = pkgs.stdenv.mkDerivation {
+        orchid = pkgs.buildGoModule {
           pname = "orchid";
           version = "0.1.0";
           src = ./.;
-          nativeBuildInputs = [ pkgs.go ];
-
-          buildPhase = ''
-            runHook preBuild
-            export HOME="$TMPDIR"
-            export CGO_ENABLED=0
-            export GOCACHE="$TMPDIR/go-cache"
-            mkdir -p "$GOCACHE"
-            go build -trimpath -buildvcs=false -o orchid .
-            runHook postBuild
-          '';
-
-          installPhase = ''
-            runHook preInstall
-            mkdir -p $out/bin
-            install -m755 orchid $out/bin/orchid
-            runHook postInstall
-          '';
+          vendorHash = "sha256-KcwQhDiW2OjMw0OA0cYZGdLJhA+KrsBjH2WqeKHqU6U=";
+          subPackages = [ "." ];
 
           meta = with pkgs.lib; {
             description = "Orchid VM manager";
