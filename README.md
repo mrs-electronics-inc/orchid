@@ -16,6 +16,8 @@ Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Orchid
 
 Host setup, base image maintenance, and troubleshooting live in [docs/server.md](docs/server.md).
 
+The hypervisor now runs an Orchid daemon managed with `orchid server install`, `orchid server status`, `orchid server run`, and `orchid server proxy`. The `orchid list` command talks to that daemon over SSH.
+
 ## Install
 
 Install with Go:

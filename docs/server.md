@@ -40,6 +40,18 @@ sudo just build-base
 
 `just setup` installs host dependencies and downloads the Debian 12 `generic` base image. `just build-base` creates a new versioned Orchid base image and refreshes `orchid-base.qcow2` to point at it.
 
+### Install the daemon
+
+After building the binary on the host, install the checked-in systemd service with:
+
+```bash
+sudo orchid server install
+```
+
+That command installs `/usr/local/bin/orchid`, writes `orchid.service` to `/etc/systemd/system`, reloads systemd, and enables the service. The daemon listens on `/run/orchid/orchid.sock`, and laptop-side commands reach it through `ssh <hypervisor> orchid server proxy`.
+
+Use `orchid server status` on the host to confirm the service state, and `orchid server run` if you want to run the daemon in the foreground during local debugging.
+
 ## Troubleshooting
 
 If `sudo just build-base` fails with `Host does not support any virtualization options` or `Unable to start event thread: Resource temporarily unavailable`, libvirtd is probably hitting a systemd task limit on the host. Increase the service limit and restart libvirtd:
