@@ -1,6 +1,7 @@
 package orchidcli
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -102,6 +103,11 @@ func buildOrchidBaseImage() error {
 	}
 	defer os.RemoveAll(tmpDir)
 
+	builderKeyPath, builderPublicKey, err := createBuilderSSHKeyPair(tmpDir, buildVM)
+	if err != nil {
+		return err
+	}
+
 	cleanup := func() {
 		_ = exec.Command("virsh", "-c", "qemu:///system", "destroy", buildVM).Run()
 		_ = exec.Command("virsh", "-c", "qemu:///system", "undefine", buildVM).Run()
@@ -110,7 +116,7 @@ func buildOrchidBaseImage() error {
 	}
 	defer cleanup()
 
-	if err := writeOrchidBaseSeedFiles(tmpDir, buildVM); err != nil {
+	if err := writeOrchidBaseSeedFiles(tmpDir, buildVM, builderPublicKey); err != nil {
 		return err
 	}
 
@@ -154,17 +160,17 @@ func buildOrchidBaseImage() error {
 	}
 
 	fmt.Println("Waiting for SSH to become available...")
-	if err := waitForPasswordSSH(ip, 20, 5); err != nil {
+	if err := waitForSSHKey(ip, builderKeyPath, 20, 5); err != nil {
 		return fmt.Errorf("waiting for base builder SSH: %w", err)
 	}
 
 	fmt.Println("Waiting for cloud-init to finish...")
-	if err := runPasswordSSHCommand(ip, "sudo", "cloud-init", "status", "--wait"); err != nil {
+	if err := runSSHKeyCommand(ip, builderKeyPath, "sudo", "cloud-init", "status", "--wait"); err != nil {
 		return fmt.Errorf("waiting for base builder cloud-init: %w", err)
 	}
 
 	fmt.Println("Cleaning the image for cloning...")
-	if err := runPasswordSSHShellCommand(ip, `
+	if err := runSSHKeyShellCommand(ip, builderKeyPath, `
 sudo cloud-init clean --logs --seed &&
 sudo rm -f /etc/ssh/ssh_host_* &&
 sudo truncate -s 0 /etc/machine-id &&
@@ -216,8 +222,22 @@ func ensureDebianBaseImagePresent() error {
 	return nil
 }
 
-func writeOrchidBaseSeedFiles(tmpDir, buildVM string) error {
-	userData := buildOrchidBaseUserData()
+func createBuilderSSHKeyPair(tmpDir, buildVM string) (string, string, error) {
+	privateKeyPath := filepath.Join(tmpDir, buildVM)
+	if _, err := runLocalCommand("ssh-keygen", "-t", "ed25519", "-N", "", "-f", privateKeyPath, "-C", buildVM); err != nil {
+		return "", "", fmt.Errorf("creating builder SSH key pair: %w", err)
+	}
+
+	publicKeyPath := privateKeyPath + ".pub"
+	publicKeyData, err := os.ReadFile(publicKeyPath)
+	if err != nil {
+		return "", "", fmt.Errorf("reading builder public key: %w", err)
+	}
+	return privateKeyPath, strings.TrimSpace(string(publicKeyData)), nil
+}
+
+func writeOrchidBaseSeedFiles(tmpDir, buildVM, publicKey string) error {
+	userData := buildOrchidBaseUserData(publicKey)
 	metaData := "instance-id: " + buildVM + "\nlocal-hostname: orchid-base\n"
 	networkConfig := "version: 2\nethernets:\n  default:\n    match:\n      name: \"e*\"\n    dhcp4: true\n"
 
@@ -233,23 +253,21 @@ func writeOrchidBaseSeedFiles(tmpDir, buildVM string) error {
 	return nil
 }
 
-func buildOrchidBaseUserData() string {
+func buildOrchidBaseUserData(publicKey string) string {
 	var b strings.Builder
 	b.WriteString("#cloud-config\n")
 	b.WriteString("hostname: orchid-base\n")
-	b.WriteString("ssh_pwauth: true\n")
+	b.WriteString("ssh_pwauth: false\n")
 	b.WriteString("locale: false\n")
 	b.WriteString("users:\n")
 	b.WriteString("  - name: dev\n")
 	b.WriteString("    sudo: ALL=(ALL) NOPASSWD:ALL\n")
 	b.WriteString("    shell: /bin/bash\n")
-	b.WriteString("    lock_passwd: false\n")
-	b.WriteString("chpasswd:\n")
-	b.WriteString("  expire: false\n")
-	b.WriteString("  users:\n")
-	b.WriteString("    - name: dev\n")
-	b.WriteString("      password: dev\n")
-	b.WriteString("      type: text\n")
+	b.WriteString("    lock_passwd: true\n")
+	b.WriteString("    ssh_authorized_keys:\n")
+	b.WriteString("      - ")
+	b.WriteString(publicKey)
+	b.WriteString("\n")
 	b.WriteString("packages:\n")
 	for _, pkg := range []string{"git", "curl", "locales", "xz-utils", "ripgrep", "fd-find", "zsh", "direnv"} {
 		b.WriteString("  - ")
@@ -260,7 +278,7 @@ func buildOrchidBaseUserData() string {
 	b.WriteString("write_files:\n")
 	b.WriteString("  - path: /etc/ssh/sshd_config.d/orchid.conf\n")
 	b.WriteString("    content: |\n")
-	b.WriteString("      PasswordAuthentication yes\n")
+	b.WriteString("      PasswordAuthentication no\n")
 	b.WriteString("      AcceptEnv TERM\n")
 	b.WriteString("  - path: /usr/local/bin/orchid-bootstrap.sh\n")
 	b.WriteString("    permissions: '0755'\n")
@@ -273,6 +291,62 @@ func buildOrchidBaseUserData() string {
 	b.WriteString("runcmd:\n")
 	b.WriteString("  - /usr/local/bin/orchid-bootstrap.sh\n")
 	return b.String()
+}
+
+func waitForSSHKey(ip, identityFile string, attempts int, sleep time.Duration) error {
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		if err := runSSHKeyCommand(ip, identityFile, "true"); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+		if attempt < attempts {
+			time.Sleep(sleep)
+		}
+	}
+	if lastErr == nil {
+		return fmt.Errorf("ssh to %s is not ready", ip)
+	}
+	return lastErr
+}
+
+func runSSHKeyCommand(ip, identityFile string, remoteArgs ...string) error {
+	args := sshKeyArgs(ip, identityFile, remoteArgs...)
+	cmd := exec.Command("ssh", args...)
+	var stderr bytes.Buffer
+	cmd.Stdout = io.Discard
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		trimmed := strings.TrimSpace(stderr.String())
+		if trimmed == "" {
+			return err
+		}
+		return fmt.Errorf("ssh to %s failed: %s", ip, trimmed)
+	}
+	return nil
+}
+
+func runSSHKeyShellCommand(ip, identityFile, shellCommand string) error {
+	return runSSHKeyCommand(ip, identityFile, "sh", "-lc", shellCommand)
+}
+
+func sshKeyArgs(ip, identityFile string, remoteArgs ...string) []string {
+	args := []string{
+		"-o", "BatchMode=yes",
+		"-o", "ConnectTimeout=5",
+		"-o", "StrictHostKeyChecking=no",
+		"-o", "UserKnownHostsFile=/dev/null",
+	}
+	if identityFile != "" {
+		args = append(args, "-i", identityFile, "-o", "IdentitiesOnly=yes")
+	}
+	if len(remoteArgs) == 0 {
+		args = append(args, "-tt")
+	}
+	args = append(args, "dev@"+ip)
+	args = append(args, remoteArgs...)
+	return args
 }
 
 func downloadFile(dstPath, url string) error {
@@ -313,67 +387,6 @@ func selectVirtType() string {
 		return "kvm"
 	}
 	return "qemu"
-}
-
-func waitForPasswordSSH(ip string, attempts int, sleep time.Duration) error {
-	var lastErr error
-	for attempt := 1; attempt <= attempts; attempt++ {
-		if err := runPasswordSSHCommand(ip, "true"); err == nil {
-			return nil
-		} else {
-			lastErr = err
-		}
-		if attempt < attempts {
-			time.Sleep(sleep)
-		}
-	}
-	if lastErr == nil {
-		return fmt.Errorf("ssh to %s is not ready", ip)
-	}
-	return lastErr
-}
-
-func runPasswordSSHCommand(ip string, remoteArgs ...string) error {
-	args := passwordSSHArgs(ip, remoteArgs...)
-	cmd := exec.Command("sshpass", append([]string{"-p", "dev", "ssh"}, args...)...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		trimmed := strings.TrimSpace(string(output))
-		if trimmed == "" {
-			return err
-		}
-		return fmt.Errorf("ssh to %s failed: %s", ip, trimmed)
-	}
-	return nil
-}
-
-func runPasswordSSHShellCommand(ip, shellCommand string) error {
-	args := passwordSSHArgs(ip, "sh", "-lc", shellCommand)
-	cmd := exec.Command("sshpass", append([]string{"-p", "dev", "ssh"}, args...)...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		trimmed := strings.TrimSpace(string(output))
-		if trimmed == "" {
-			return err
-		}
-		return fmt.Errorf("ssh to %s failed: %s", ip, trimmed)
-	}
-	return nil
-}
-
-func passwordSSHArgs(ip string, remoteArgs ...string) []string {
-	args := []string{
-		"-o", "BatchMode=yes",
-		"-o", "ConnectTimeout=5",
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "UserKnownHostsFile=/dev/null",
-	}
-	if len(remoteArgs) == 0 {
-		args = append(args, "-tt")
-	}
-	args = append(args, "dev@"+ip)
-	args = append(args, remoteArgs...)
-	return args
 }
 
 func waitForDomainState(vmName, desiredState string, attempts int, sleep time.Duration) error {
