@@ -142,6 +142,10 @@ func buildOrchidBaseImage() error {
 	); err != nil {
 		return fmt.Errorf("starting base build VM: %w", err)
 	}
+	// Tag the builder so daemon queries can keep it out of normal VM listings.
+	if err := setOrchidDomainRole(buildVM, orchidMetadataRoleBase); err != nil {
+		return fmt.Errorf("tagging base build VM: %w", err)
+	}
 
 	fmt.Println("Waiting for base builder VM to get an IP...")
 	ip, err := waitForDaemonVMIP(buildVM, 20, 5)

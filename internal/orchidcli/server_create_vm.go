@@ -124,6 +124,15 @@ func runCreateVMJob(job *daemonJob, req daemonCreateVMRequest) {
 		job.fail(daemonJobStageStartingVM, "starting VM", err.Error())
 		return
 	}
+	// Mark the domain immediately so the daemon only indexes Orchid-managed VMs.
+	if err := setOrchidDomainRole(vmName, orchidMetadataRoleVM); err != nil {
+		if cleanupErr := destroyVM(vmName); cleanupErr != nil {
+			job.fail(daemonJobStageStartingVM, "tagging VM", fmt.Sprintf("%v (cleanup failed: %v)", err, cleanupErr))
+			return
+		}
+		job.fail(daemonJobStageStartingVM, "tagging VM", err.Error())
+		return
+	}
 
 	job.update(daemonJobStateRunning, daemonJobStageWaitingForIP, "waiting for IP address", vmName, "")
 	ip, err := waitForDaemonVMIP(vmName, createVMRetryAttempts, createVMRetrySleep)

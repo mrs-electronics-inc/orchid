@@ -137,6 +137,14 @@ func handleVMs(w http.ResponseWriter, r *http.Request) {
 			VMs []daemonVM `json:"vms"`
 		}{VMs: make([]daemonVM, 0, len(vms))}
 		for _, vm := range vms {
+			managed, err := domainIsOrchidVM(vm.Name)
+			if err != nil {
+				writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("checking %s metadata: %v", vm.Name, err))
+				return
+			}
+			if !managed {
+				continue
+			}
 			resp.VMs = append(resp.VMs, daemonVM{Name: vm.Name, State: vm.State})
 		}
 		writeJSON(w, http.StatusOK, resp)
@@ -215,6 +223,20 @@ func handleVMByName(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if _, err := runVirshCommand("dominfo", name); err != nil {
+			writeJSONError(w, http.StatusNotFound, "not found")
+			return
+		}
+		managed, err := domainIsOrchidVM(name)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("checking %s metadata: %v", name, err))
+			return
+		}
+		if !managed {
+			writeJSONError(w, http.StatusNotFound, "not found")
+			return
+		}
+
 		ip, err := resolveVMIP(name)
 		if err != nil {
 			writeJSONError(w, http.StatusNotFound, err.Error())
@@ -227,6 +249,20 @@ func handleVMByName(w http.ResponseWriter, r *http.Request) {
 		})
 	case http.MethodDelete:
 		if found {
+			writeJSONError(w, http.StatusNotFound, "not found")
+			return
+		}
+
+		if _, err := runVirshCommand("dominfo", name); err != nil {
+			writeJSONError(w, http.StatusNotFound, "not found")
+			return
+		}
+		managed, err := domainIsOrchidVM(name)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("checking %s metadata: %v", name, err))
+			return
+		}
+		if !managed {
 			writeJSONError(w, http.StatusNotFound, "not found")
 			return
 		}
