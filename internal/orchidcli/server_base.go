@@ -41,6 +41,8 @@ chmod 0644 /etc/profile.d/orchid-path.sh
 export PATH="/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:${PATH}"
 nix profile install nixpkgs#helix nixpkgs#zellij nixpkgs#nodejs nixpkgs#go
 
+systemctl enable --now qemu-guest-agent
+
 ln -sf /usr/bin/fdfind /usr/local/bin/fd
 
 rm -rf /usr/local/share/oh-my-zsh
@@ -141,6 +143,7 @@ func buildOrchidBaseImage() error {
 		"--security", "type=none",
 		"--os-variant", "debian12",
 		"--network", "network=default,model=virtio",
+		"--channel", "unix,target_type=virtio,name=org.qemu.guest_agent.0",
 		"--graphics", "none",
 		"--console", "pty,target_type=serial",
 		"--noautoconsole",
@@ -269,7 +272,7 @@ func buildOrchidBaseUserData(publicKey string) string {
 	b.WriteString(publicKey)
 	b.WriteString("\n")
 	b.WriteString("packages:\n")
-	for _, pkg := range []string{"git", "curl", "locales", "xz-utils", "ripgrep", "fd-find", "zsh", "direnv"} {
+	for _, pkg := range []string{"git", "curl", "locales", "xz-utils", "ripgrep", "fd-find", "zsh", "direnv", "qemu-guest-agent"} {
 		b.WriteString("  - ")
 		b.WriteString(pkg)
 		b.WriteString("\n")

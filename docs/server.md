@@ -63,6 +63,7 @@ Orchid uses a two-stage image pipeline:
    - Nix with flakes enabled
    - Node.js
    - Go
+   - qemu-guest-agent
    - PI coding agent
    - Codex CLI
    - zsh with the `robbyrussell` theme
