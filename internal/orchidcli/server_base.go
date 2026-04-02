@@ -43,7 +43,7 @@ ORCHID_PATH
 chmod 0644 /etc/profile.d/orchid-path.sh
 
 export PATH="/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:${PATH}"
-nix profile install nixpkgs#helix nixpkgs#zellij nixpkgs#nodejs nixpkgs#go
+nix profile install nixpkgs#helix nixpkgs#zellij nixpkgs#nodejs nixpkgs#go nixpkgs#ghostty^terminfo
 
 systemctl enable --now qemu-guest-agent
 
