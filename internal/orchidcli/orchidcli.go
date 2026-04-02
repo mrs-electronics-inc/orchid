@@ -288,6 +288,7 @@ func execSSH(hypervisor, ip, identityFile, user string, remoteArgs []string) int
 	sshArgs = append(sshArgs, remoteArgs...)
 
 	cmd := exec.Command("ssh", sshArgs...)
+	cmd.Env = envWithOverride("TERM", "xterm-256color")
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -301,4 +302,24 @@ func execSSH(hypervisor, ip, identityFile, user string, remoteArgs []string) int
 	}
 
 	return 0
+}
+
+func envWithOverride(key, value string) []string {
+	prefix := key + "="
+	env := make([]string, 0, len(os.Environ())+1)
+	replaced := false
+	for _, entry := range os.Environ() {
+		if strings.HasPrefix(entry, prefix) {
+			if !replaced {
+				env = append(env, prefix+value)
+				replaced = true
+			}
+			continue
+		}
+		env = append(env, entry)
+	}
+	if !replaced {
+		env = append(env, prefix+value)
+	}
+	return env
 }

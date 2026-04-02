@@ -43,7 +43,7 @@ ORCHID_PATH
 chmod 0644 /etc/profile.d/orchid-path.sh
 
 export PATH="/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:${PATH}"
-nix profile install nixpkgs#helix nixpkgs#zellij nixpkgs#nodejs nixpkgs#go nixpkgs#ghostty^terminfo
+nix profile install nixpkgs#helix nixpkgs#zellij nixpkgs#nodejs nixpkgs#go
 
 systemctl enable --now qemu-guest-agent
 
@@ -286,7 +286,6 @@ func buildOrchidBaseUserData(publicKey string) string {
 	b.WriteString("  - path: /etc/ssh/sshd_config.d/orchid.conf\n")
 	b.WriteString("    content: |\n")
 	b.WriteString("      PasswordAuthentication no\n")
-	b.WriteString("      AcceptEnv TERM\n")
 	b.WriteString("  - path: /usr/local/bin/orchid-bootstrap.sh\n")
 	b.WriteString("    permissions: '0755'\n")
 	b.WriteString("    content: |\n")
