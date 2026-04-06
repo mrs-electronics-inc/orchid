@@ -114,6 +114,13 @@ func loadCurrentConfig() (config, string, error) {
 	return cfg, path, nil
 }
 
+func configDisplayValue(value string) string {
+	if value == "" {
+		return "<unset>"
+	}
+	return strconv.Quote(value)
+}
+
 func saveConfigUpdate(update func(*config) error) error {
 	cfg, path, err := loadConfig()
 	if err != nil {
