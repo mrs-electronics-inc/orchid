@@ -93,70 +93,11 @@ func printHelp() {
 	fmt.Fprintln(os.Stdout, "  orchid <command> [args]")
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "Commands:")
-	fmt.Fprintln(os.Stdout, "  config      Set the local Orchid configuration")
+	fmt.Fprintln(os.Stdout, "  config      Manage the local Orchid configuration")
 	fmt.Fprintln(os.Stdout, "  server      Manage the Orchid daemon on the hypervisor")
 	fmt.Fprintln(os.Stdout, "  vm          Connect to, create, destroy, or list VMs")
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "See docs/server.md for hypervisor setup and the README for common workflows.")
-}
-
-func runConfig(args []string) int {
-	if len(args) < 1 {
-		usageConfig()
-	}
-
-	switch args[0] {
-	case "set":
-		return runConfigSet(args[1:])
-	case "-h", "--help", "help":
-		usageConfig()
-	default:
-		fmt.Fprintf(os.Stderr, "unknown config command: %s\n\n", args[0])
-		usageConfig()
-	}
-
-	return 0
-}
-
-func usageConfig() {
-	fmt.Fprintln(os.Stderr, "usage: orchid config set hypervisor <host>")
-	fmt.Fprintln(os.Stderr, "       orchid config set identity-file <path>")
-	os.Exit(2)
-}
-
-func runConfigSet(args []string) int {
-	if len(args) != 2 {
-		usageConfig()
-	}
-
-	var update func(*config) error
-	switch args[0] {
-	case "hypervisor":
-		update = func(cfg *config) error {
-			cfg.Hypervisor = args[1]
-			return nil
-		}
-	case "identity-file":
-		update = func(cfg *config) error {
-			cfg.IdentityFile = args[1]
-			return nil
-		}
-	default:
-		usageConfig()
-	}
-
-	if err := saveConfigUpdate(update); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
-	path, err := configPath()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	fmt.Printf("Wrote %s\n", path)
-	return 0
 }
 
 func resolveIP(hypervisor, vmName string) (string, error) {

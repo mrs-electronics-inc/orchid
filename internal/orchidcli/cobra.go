@@ -168,13 +168,77 @@ func newVMListCommand() *cobra.Command {
 func newConfigCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
-		Short: "Set the local Orchid configuration",
-		Long:  "The config command stores the hypervisor host and SSH identity used by vm commands.",
+		Short: "Manage the local Orchid configuration",
+		Long:  "The config command stores and queries the hypervisor host and SSH identity used by vm commands.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
 		},
 	}
+	cmd.AddCommand(newConfigGetCommand())
+	cmd.AddCommand(newConfigListCommand())
 	cmd.AddCommand(newConfigSetCommand())
+	return cmd
+}
+
+func newConfigGetCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "get <hypervisor|identity-file>",
+		Short: "Show a local configuration value",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				printConfigUsage(cmd.ErrOrStderr())
+				return exitCode(2)
+			}
+
+			cfg, path, err := loadCurrentConfig()
+			if err != nil {
+				return err
+			}
+
+			switch args[0] {
+			case "hypervisor":
+				if cfg.Hypervisor == "" {
+					return fmt.Errorf("hypervisor is not set in %s", path)
+				}
+				fmt.Fprintln(cmd.OutOrStdout(), cfg.Hypervisor)
+			case "identity-file", "identity_file":
+				if cfg.IdentityFile == "" {
+					return fmt.Errorf("identity file is not set in %s", path)
+				}
+				fmt.Fprintln(cmd.OutOrStdout(), cfg.IdentityFile)
+			default:
+				printConfigUsage(cmd.ErrOrStderr())
+				return exitCode(2)
+			}
+
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newConfigListCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "Show the current local configuration",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 0 {
+				printConfigUsage(cmd.ErrOrStderr())
+				return exitCode(2)
+			}
+
+			cfg, path, err := loadCurrentConfig()
+			if err != nil {
+				return err
+			}
+
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "Config file: %s\n", path)
+			fmt.Fprintf(out, "hypervisor = %s\n", configDisplayValue(cfg.Hypervisor))
+			fmt.Fprintf(out, "identity_file = %s\n", configDisplayValue(cfg.IdentityFile))
+			return nil
+		},
+	}
 	return cmd
 }
 
@@ -183,11 +247,48 @@ func newConfigSetCommand() *cobra.Command {
 		Use:   "set <hypervisor|identity-file> <value>",
 		Short: "Set a local configuration value",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			runArgs := append([]string{"set"}, args...)
-			return exitCode(runConfig(runArgs))
+			if len(args) != 2 {
+				printConfigUsage(cmd.ErrOrStderr())
+				return exitCode(2)
+			}
+
+			var update func(*config) error
+			switch args[0] {
+			case "hypervisor":
+				update = func(cfg *config) error {
+					cfg.Hypervisor = args[1]
+					return nil
+				}
+			case "identity-file", "identity_file":
+				update = func(cfg *config) error {
+					cfg.IdentityFile = args[1]
+					return nil
+				}
+			default:
+				printConfigUsage(cmd.ErrOrStderr())
+				return exitCode(2)
+			}
+
+			if err := saveConfigUpdate(update); err != nil {
+				return err
+			}
+
+			path, err := configPath()
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Wrote %s\n", path)
+			return nil
 		},
 	}
 	return cmd
+}
+
+func printConfigUsage(w interface{ Write([]byte) (int, error) }) {
+	fmt.Fprintln(w, "usage: orchid config get <hypervisor|identity-file>")
+	fmt.Fprintln(w, "       orchid config list")
+	fmt.Fprintln(w, "       orchid config set hypervisor <host>")
+	fmt.Fprintln(w, "       orchid config set identity-file <path>")
 }
 
 func newServerCommand() *cobra.Command {

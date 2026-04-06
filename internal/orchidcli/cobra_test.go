@@ -41,7 +41,7 @@ func TestCommandTree(t *testing.T) {
 		t.Fatalf("finding config command: %v", err)
 	}
 	configNames := commandNames(configCmd.Commands())
-	assertContainsAll(t, configNames, []string{"set"})
+	assertContainsAll(t, configNames, []string{"get", "list", "set"})
 
 	serverCmd, _, err := root.Find([]string{"server"})
 	if err != nil {
