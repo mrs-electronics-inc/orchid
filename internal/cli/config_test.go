@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -107,6 +108,54 @@ func TestConfigCommands(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "identity_file = \"/tmp/id_orchid\"") {
 		t.Fatalf("list output = %q, want identity_file entry", stdout)
+	}
+}
+
+func TestVMCreateDoesNotWriteConfig(t *testing.T) {
+	configHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+
+	identityDir := t.TempDir()
+	identityFile := filepath.Join(identityDir, "id_orchid")
+	if err := os.WriteFile(identityFile, []byte("PRIVATE KEY\n"), 0o600); err != nil {
+		t.Fatalf("writing identity file: %v", err)
+	}
+	if err := os.WriteFile(identityFile+".pub", []byte("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexample test@example\n"), 0o600); err != nil {
+		t.Fatalf("writing public key: %v", err)
+	}
+
+	originalSubmit := submitDaemonCreateVMFunc
+	originalWait := waitForDaemonJobFunc
+	submitDaemonCreateVMFunc = func(hypervisor string, req daemonCreateVMRequest) (daemonCreateVMResponse, error) {
+		if hypervisor != "hypervisor.example" {
+			t.Fatalf("hypervisor = %q, want %q", hypervisor, "hypervisor.example")
+		}
+		if req.Name != "demo-vm" {
+			t.Fatalf("vm name = %q, want %q", req.Name, "demo-vm")
+		}
+		return daemonCreateVMResponse{JobID: "job-123"}, nil
+	}
+	waitForDaemonJobFunc = func(hypervisor, jobID string) (daemonJobStatus, error) {
+		if hypervisor != "hypervisor.example" {
+			t.Fatalf("wait hypervisor = %q, want %q", hypervisor, "hypervisor.example")
+		}
+		if jobID != "job-123" {
+			t.Fatalf("job id = %q, want %q", jobID, "job-123")
+		}
+		return daemonJobStatus{State: daemonJobStateSucceeded, VMName: "demo-vm"}, nil
+	}
+	defer func() {
+		submitDaemonCreateVMFunc = originalSubmit
+		waitForDaemonJobFunc = originalWait
+	}()
+
+	if code := vmCreate("demo-vm", "hypervisor.example", identityFile, "https://github.com/org/repo.git"); code != 0 {
+		t.Fatalf("vmCreate returned %d", code)
+	}
+
+	configPath := filepath.Join(configHome, "orchid", "config.toml")
+	if _, err := os.Stat(configPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("config file exists at %s; vm create should not write config", configPath)
 	}
 }
 

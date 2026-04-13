@@ -12,6 +12,11 @@ import (
 	"text/tabwriter"
 )
 
+var (
+	submitDaemonCreateVMFunc = submitDaemonCreateVM
+	waitForDaemonJobFunc     = waitForDaemonJob
+)
+
 func vmConnect(user, hypervisorFlag, identityFileFlag, vmName string, remoteArgs []string) int {
 	hypervisor, err := resolveHypervisor(hypervisorFlag)
 	if err != nil {
@@ -66,15 +71,6 @@ func vmCreate(nameFlag, hypervisorFlag, identityFileFlag, repoURL string) int {
 		return 1
 	}
 
-	if err := saveConfigUpdate(func(cfg *config) error {
-		cfg.Hypervisor = hypervisor
-		cfg.IdentityFile = identityFile
-		return nil
-	}); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
 	req := daemonCreateVMRequest{
 		Name:       vmName,
 		RepoURL:    repoURL,
@@ -83,13 +79,13 @@ func vmCreate(nameFlag, hypervisorFlag, identityFileFlag, repoURL string) int {
 	}
 
 	fmt.Printf("Creating VM '%s' for %s...\n", vmName, repoURL)
-	submit, err := submitDaemonCreateVM(hypervisor, req)
+	submit, err := submitDaemonCreateVMFunc(hypervisor, req)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 
-	status, err := waitForDaemonJob(hypervisor, submit.JobID)
+	status, err := waitForDaemonJobFunc(hypervisor, submit.JobID)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
