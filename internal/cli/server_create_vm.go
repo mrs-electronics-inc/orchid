@@ -19,6 +19,9 @@ const (
 	createVMVerifySleep    = 5 * time.Second
 )
 
+var tryGuestCommandDirectFunc = tryGuestCommandDirect
+var sleepFunc = time.Sleep
+
 func (s *daemonJobStore) startCreateVM(req daemonCreateVMRequest) (*daemonJob, error) {
 	if strings.TrimSpace(req.Name) == "" {
 		return nil, fmt.Errorf("name is required")
@@ -293,19 +296,35 @@ func waitForGuestSSHDirect(ip, identityFile string, attempts int, sleep time.Dur
 }
 
 func waitForGuestCloudInit(ip, identityFile string) error {
-	return tryGuestCommandDirect(ip, identityFile, "sudo", "cloud-init", "status", "--wait")
+	var lastErr error
+	for attempt := 1; attempt <= createVMRetryAttempts; attempt++ {
+		if err := tryGuestCommandDirectFunc(ip, identityFile, "sudo", "cloud-init", "status", "--wait"); err == nil {
+			return nil
+		} else if !isTransientSSHError(err) {
+			return err
+		} else {
+			lastErr = err
+		}
+		if attempt < createVMRetryAttempts {
+			sleepFunc(createVMRetrySleep)
+		}
+	}
+	if lastErr == nil {
+		return fmt.Errorf("ssh to %s is not ready", ip)
+	}
+	return lastErr
 }
 
 func pollGuestCommandDirect(ip, identityFile string, attempts int, sleep time.Duration, remoteArgs ...string) error {
 	var lastErr error
 	for attempt := 1; attempt <= attempts; attempt++ {
-		if err := tryGuestCommandDirect(ip, identityFile, remoteArgs...); err == nil {
+		if err := tryGuestCommandDirectFunc(ip, identityFile, remoteArgs...); err == nil {
 			return nil
 		} else {
 			lastErr = err
 		}
 		if attempt < attempts {
-			time.Sleep(sleep)
+			sleepFunc(sleep)
 		}
 	}
 	if lastErr == nil {
@@ -342,4 +361,25 @@ func tryGuestCommandDirect(ip, identityFile string, remoteArgs ...string) error 
 		return fmt.Errorf("ssh to %s failed: %s", ip, trimmed)
 	}
 	return nil
+}
+
+func isTransientSSHError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "connection refused"),
+		strings.Contains(msg, "ssh: connect to host"),
+		strings.Contains(msg, "connection reset by peer"),
+		strings.Contains(msg, "no route to host"),
+		strings.Contains(msg, "network is unreachable"),
+		strings.Contains(msg, "connection timed out"),
+		strings.Contains(msg, "i/o timeout"),
+		strings.Contains(msg, "operation timed out"):
+		return true
+	default:
+		return false
+	}
 }

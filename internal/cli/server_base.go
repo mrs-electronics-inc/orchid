@@ -53,24 +53,19 @@ rm -rf /usr/local/share/oh-my-zsh
 git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git /usr/local/share/oh-my-zsh
 
 mkdir -p /home/dev/.local
-chown dev:dev /home/dev/.local
 
 cat > /home/dev/.npmrc <<'ORCHID_NPMRC'
 prefix=/home/dev/.local
 ORCHID_NPMRC
-chown dev:dev /home/dev/.npmrc
 
 NPM_CONFIG_PREFIX=/home/dev/.local npm install -g @mariozechner/pi-coding-agent @openai/codex
 HOME=/home/dev PATH="/home/dev/.local/bin:${PATH}" bash -c 'curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash -s -- --skip-setup'
-chown -R dev:dev /home/dev/.local
-chown -R dev:dev /home/dev/.hermes
 
 usermod -s /usr/bin/zsh dev
 
 cat > /home/dev/.zshenv <<'ORCHID_ZSHENV'
 export PATH="${HOME}/.local/bin:/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:/usr/local/bin:${PATH}"
 ORCHID_ZSHENV
-chown dev:dev /home/dev/.zshenv
 
 cat > /home/dev/.zshrc <<'ORCHID_ZSHRC'
 export ZSH=/usr/local/share/oh-my-zsh
@@ -80,7 +75,6 @@ plugins=(git)
 source "${ZSH}/oh-my-zsh.sh"
 eval "$(direnv hook zsh)"
 ORCHID_ZSHRC
-chown dev:dev /home/dev/.zshrc
 
 mkdir -p /home/dev/.codex
 cat > /home/dev/.codex/config.toml <<'ORCHID_CODEX'
@@ -98,7 +92,7 @@ enabled = true
 [tui]
 status_line = ["model-with-reasoning", "current-dir", "git-branch", "context-used", "five-hour-limit", "weekly-limit", "codex-version", "session-id"]
 ORCHID_CODEX
-chown -R dev:dev /home/dev/.codex
+chown -R dev:dev /home/dev
 `
 
 func buildOrchidBaseImage() error {
