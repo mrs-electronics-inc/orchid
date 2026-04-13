@@ -38,7 +38,7 @@ if ! grep -q '^experimental-features = .*flakes' /etc/nix/nix.conf 2>/dev/null; 
 fi
 
 cat > /etc/profile.d/orchid-path.sh <<'ORCHID_PATH'
-export PATH="/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:/usr/local/bin:${PATH}"
+export PATH="${HOME}/.local/bin:/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:/usr/local/bin:${PATH}"
 ORCHID_PATH
 chmod 0644 /etc/profile.d/orchid-path.sh
 
@@ -52,12 +52,23 @@ ln -sf /usr/bin/fdfind /usr/local/bin/fd
 rm -rf /usr/local/share/oh-my-zsh
 git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git /usr/local/share/oh-my-zsh
 
-NPM_CONFIG_PREFIX=/usr/local npm install -g @mariozechner/pi-coding-agent @openai/codex
+mkdir -p /home/dev/.local
+chown dev:dev /home/dev/.local
+
+cat > /home/dev/.npmrc <<'ORCHID_NPMRC'
+prefix=/home/dev/.local
+ORCHID_NPMRC
+chown dev:dev /home/dev/.npmrc
+
+NPM_CONFIG_PREFIX=/home/dev/.local npm install -g @mariozechner/pi-coding-agent @openai/codex
+HOME=/home/dev PATH="/home/dev/.local/bin:${PATH}" bash -c 'curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash -s -- --skip-setup'
+chown -R dev:dev /home/dev/.local
+chown -R dev:dev /home/dev/.hermes
 
 usermod -s /usr/bin/zsh dev
 
 cat > /home/dev/.zshenv <<'ORCHID_ZSHENV'
-export PATH="/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:/usr/local/bin:${PATH}"
+export PATH="${HOME}/.local/bin:/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:/usr/local/bin:${PATH}"
 ORCHID_ZSHENV
 chown dev:dev /home/dev/.zshenv
 
@@ -75,9 +86,17 @@ mkdir -p /home/dev/.codex
 cat > /home/dev/.codex/config.toml <<'ORCHID_CODEX'
 approval_policy = "never"
 sandbox_mode = "danger-full-access"
+model = "gpt-5.4-mini"
+model_reasoning_effort = "high"
 
 [features]
 guardian_approval = true
+
+[plugins."github@openai-curated"]
+enabled = true
+
+[tui]
+status_line = ["model-with-reasoning", "current-dir", "git-branch", "context-used", "five-hour-limit", "weekly-limit", "codex-version", "session-id"]
 ORCHID_CODEX
 chown -R dev:dev /home/dev/.codex
 `

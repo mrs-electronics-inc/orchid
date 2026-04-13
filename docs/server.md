@@ -7,7 +7,7 @@ Orchid expects a Linux hypervisor host with KVM/QEMU, libvirt, a `default` NAT n
 | Resource    | Value                                                                                                                                                                                                   |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Base OS     | Debian 12 (`generic` qcow2)                                                                                                                                                                             |
-| Shared base | `orchid-base.qcow2` symlink to the current versioned Orchid base image with Nix, Node.js, Go, PI coding agent, Codex CLI, zsh, direnv, `fd`, `ripgrep`, default Codex config, and common operator tools |
+| Shared base | `orchid-base.qcow2` symlink to the current versioned Orchid base image with Nix, Node.js, Go, PI coding agent, Hermes Agent, Codex CLI, zsh, direnv, `fd`, `ripgrep`, default Codex config, and common operator tools |
 | VM disk     | Thin qcow2 overlay backed by `orchid-base.qcow2`                                                                                                                                                        |
 | Auth        | SSH key from `~/.config/orchid/config.toml`                                                                                                                                                             |
 
@@ -71,11 +71,15 @@ Orchid uses a two-stage image pipeline:
    - Go
    - qemu-guest-agent
    - PI coding agent
+   - Hermes Agent
    - Codex CLI
    - zsh with the `robbyrussell` theme
    - `direnv`
+   - a user-writable npm global prefix at `/home/dev/.local`
    - default Codex config in `~/.codex/config.toml`
    - `git`, `curl`, `helix`, `zellij`, `fd`, and `ripgrep`
+
+   This lets `dev` install npm-based CLIs globally without `sudo` or extra config.
 3. Per-VM overlay
    Created for each repo and used only for repo checkout, repo-specific closures, and transient build output.
 
