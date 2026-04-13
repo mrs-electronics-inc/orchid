@@ -14,6 +14,10 @@ func TestCommandTree(t *testing.T) {
 	assertContainsAll(t, names, []string{"config", "server", "vm"})
 	assertDoesNotContain(t, names, []string{"connect", "create", "destroy", "list"})
 
+	if root.Version == "" {
+		t.Fatal("root command is missing version metadata")
+	}
+
 	vmCmd, _, err := root.Find([]string{"vm"})
 	if err != nil {
 		t.Fatalf("finding vm command: %v", err)

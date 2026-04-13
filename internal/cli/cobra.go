@@ -62,6 +62,7 @@ orchid server build-base`,
 		},
 	}
 
+	configureVersion(cmd)
 	cmd.AddCommand(newConfigCommand())
 	cmd.AddCommand(newServerCommand())
 	cmd.AddCommand(newVMCommand())

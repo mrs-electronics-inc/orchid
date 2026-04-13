@@ -20,11 +20,21 @@ Host setup, base image maintenance, and troubleshooting live in [docs/server.md]
 
 ## Install
 
-Install with Go:
+Orchid is distributed through [GitHub Releases](https://github.com/mrs-electronics-inc/orchid/releases). Download the latest archive for your platform, extract `orchid`, and place it on your `PATH`.
+
+You can also install with Go:
 
 ```bash
 go install github.com/mrs-electronics-inc/orchid/cmd/orchid@latest
 ```
+
+Verify the build with:
+
+```bash
+orchid --version
+```
+
+Release workflow details live in [docs/releases.md](docs/releases.md).
 
 ## Config
 

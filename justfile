@@ -10,7 +10,7 @@ deps:
 # Build the Orchid CLI
 build:
     @mkdir -p bin
-    @go build -o ./bin/orchid ./cmd/orchid
+    @go build -ldflags "-X github.com/mrs-electronics-inc/orchid/cmd/orchid.version=dev -X github.com/mrs-electronics-inc/orchid/cmd/orchid.commit=$(git rev-parse --short=7 HEAD 2>/dev/null || true)" -o ./bin/orchid ./cmd/orchid
 
 # Format Go source files
 format:
@@ -30,3 +30,7 @@ check: format lint test
 # Run the Orchid CLI locally, e.g. `just run list`
 run *args: build
     @./bin/orchid {{args}}
+
+# Install the Orchid CLI locally
+install:
+    @go install -ldflags "-X github.com/mrs-electronics-inc/orchid/cmd/orchid.version=$(tr -d '\n' < VERSION) -X github.com/mrs-electronics-inc/orchid/cmd/orchid.commit=$(git rev-parse --short=7 HEAD 2>/dev/null || true)" ./cmd/orchid

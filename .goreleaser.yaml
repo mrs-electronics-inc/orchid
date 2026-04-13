@@ -1,0 +1,29 @@
+version: 2
+
+project_name: orchid
+
+builds:
+  - id: orchid
+    main: ./cmd/orchid
+    binary: orchid
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/mrs-electronics-inc/orchid/cmd/orchid.version={{.Version}}
+      - -X github.com/mrs-electronics-inc/orchid/cmd/orchid.commit={{.Commit}}
+
+archives:
+  - id: orchid
+    formats: [tar.gz]
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
