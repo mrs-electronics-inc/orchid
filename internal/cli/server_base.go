@@ -61,7 +61,9 @@ ORCHID_NPMRC
 chown dev:dev /home/dev/.npmrc
 
 NPM_CONFIG_PREFIX=/home/dev/.local npm install -g @mariozechner/pi-coding-agent @openai/codex
+HOME=/home/dev PATH="/home/dev/.local/bin:${PATH}" bash -c 'curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash -s -- --skip-setup'
 chown -R dev:dev /home/dev/.local
+chown -R dev:dev /home/dev/.hermes
 
 usermod -s /usr/bin/zsh dev
 

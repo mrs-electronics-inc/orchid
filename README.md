@@ -2,7 +2,7 @@
 
 _Because why not._
 
-Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Orchid keeps per-VM disks small by building a shared base image with the common toolchain already installed, then creating thin qcow2 overlays for each repo-specific VM. The shared base also gives `dev` a zsh shell with the `robbyrussell` theme, `direnv` for repo-local environments, a user-writable npm global prefix, and a default Codex config. VM login is key-based; password login is disabled in the guest.
+Lightweight, disposable Debian 12 VMs with Nix for running coding agents. Orchid keeps per-VM disks small by building a shared base image with the common toolchain already installed, then creating thin qcow2 overlays for each repo-specific VM. The shared base also gives `dev` a zsh shell with the `robbyrussell` theme, `direnv` for repo-local environments, Hermes Agent, a user-writable npm global prefix, and a default Codex config. VM login is key-based; password login is disabled in the guest.
 
 VM lifecycle commands live under `orchid vm`.
 
