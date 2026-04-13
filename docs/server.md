@@ -22,7 +22,7 @@ sudo apt install -y virtinst cloud-image-utils genisoimage qemu-utils sshpass wg
 ### Install the daemon
 
 ```bash
-sudo env GOBIN=/usr/local/bin go install github.com/mrs-electronics-inc/orchid@latest
+   sudo env GOBIN=/usr/local/bin go install github.com/mrs-electronics-inc/orchid/cmd/orchid@latest
 sudo orchid server install
 ```
 

@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	cli "github.com/mrs-electronics-inc/orchid/internal/orchidcli"
+	cli "github.com/mrs-electronics-inc/orchid/internal/cli"
 )
 
 func main() {

@@ -10,7 +10,7 @@ deps:
 # Build the Orchid CLI
 build:
     @mkdir -p bin
-    @go build -o ./bin/orchid .
+    @go build -o ./bin/orchid ./cmd/orchid
 
 # Format Go source files
 format:

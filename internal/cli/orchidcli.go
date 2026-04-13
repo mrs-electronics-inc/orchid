@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -35,69 +34,6 @@ func Run(args []string) int {
 	}
 
 	return 0
-}
-
-func runConnect(args []string) int {
-	fs := flag.NewFlagSet("connect", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	user := fs.String("user", defaultSSHUser, "SSH user")
-	hypervisorFlag := fs.String("hypervisor", "", "SSH host for the libvirt hypervisor")
-	identityFileFlag := fs.String("identity-file", "", "SSH private key used for guest login")
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-
-	if fs.NArg() < 1 {
-		fmt.Fprintln(os.Stderr, "usage: orchid vm connect [--hypervisor HOST] [--identity-file PATH] [--user USER] <vm-name> [-- <ssh-args...>]")
-		return 2
-	}
-
-	vmName := fs.Arg(0)
-	remoteArgs := fs.Args()[1:]
-
-	hypervisor, err := resolveHypervisor(*hypervisorFlag)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	identity, err := resolveIdentityFile(*identityFileFlag)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	ip, err := fetchDaemonVMIP(hypervisor, vmName)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
-	fmt.Printf("Connecting to %s (%s)\n", vmName, ip)
-	return execSSH(hypervisor, ip, identity, *user, remoteArgs)
-}
-
-func usage() {
-	fmt.Fprintln(os.Stderr, "usage: orchid <command> [args]")
-	fmt.Fprintln(os.Stderr, "commands: config, server, vm")
-	os.Exit(2)
-}
-
-func printHelp() {
-	fmt.Fprintln(os.Stdout, "orchid manages disposable Debian 12 VMs for coding agents.")
-	fmt.Fprintln(os.Stdout, "")
-	fmt.Fprintln(os.Stdout, "It keeps per-VM disks small by using a shared Orchid base image with the")
-	fmt.Fprintln(os.Stdout, "common toolchain already installed, then creates thin qcow2 overlays for")
-	fmt.Fprintln(os.Stdout, "each repo-specific VM. A daemon runs on the configured hypervisor and the")
-	fmt.Fprintln(os.Stdout, "CLI talks to it over SSH for VM lifecycle operations.")
-	fmt.Fprintln(os.Stdout, "")
-	fmt.Fprintln(os.Stdout, "Usage:")
-	fmt.Fprintln(os.Stdout, "  orchid <command> [args]")
-	fmt.Fprintln(os.Stdout, "")
-	fmt.Fprintln(os.Stdout, "Commands:")
-	fmt.Fprintln(os.Stdout, "  config      Manage the local Orchid configuration")
-	fmt.Fprintln(os.Stdout, "  server      Manage the Orchid daemon on the hypervisor")
-	fmt.Fprintln(os.Stdout, "  vm          Connect to, create, destroy, or list VMs")
-	fmt.Fprintln(os.Stdout, "")
-	fmt.Fprintln(os.Stdout, "See docs/server.md for hypervisor setup and the README for common workflows.")
 }
 
 func resolveIP(hypervisor, vmName string) (string, error) {

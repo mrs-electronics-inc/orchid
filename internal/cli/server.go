@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -16,7 +15,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -31,49 +29,6 @@ const (
 var serverUnitFS embed.FS
 
 var serverJobStore = newDaemonJobStore()
-
-func runServer(args []string) int {
-	if len(args) < 1 {
-		usageServer()
-	}
-
-	switch args[0] {
-	case "install":
-		return runServerInstall(args[1:])
-	case "build-base":
-		return runServerBuildBase(args[1:])
-	case "proxy":
-		return runServerProxy(args[1:])
-	case "run":
-		return runServerRun(args[1:])
-	case "status":
-		return runServerStatus(args[1:])
-	case "-h", "--help", "help":
-		usageServer()
-	default:
-		fmt.Fprintf(os.Stderr, "unknown server command: %s\n\n", args[0])
-		usageServer()
-	}
-
-	return 0
-}
-
-func usageServer() {
-	fmt.Fprintln(os.Stderr, "usage: orchid server <install|build-base|proxy|run|status>")
-	os.Exit(2)
-}
-
-func runServerRun(args []string) int {
-	if len(args) != 0 {
-		usageServer()
-	}
-
-	if err := serveOrchidDaemon(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	return 0
-}
 
 func serveOrchidDaemon() error {
 	if err := os.MkdirAll(filepath.Dir(serverSocketPath), 0o755); err != nil {
@@ -323,129 +278,6 @@ func resolveVMIP(vmName string) (string, error) {
 	return "", fmt.Errorf("lease not found for MAC %s", mac)
 }
 
-func runServerProxy(args []string) int {
-	if len(args) != 0 {
-		usageServer()
-	}
-
-	conn, err := net.Dial("unix", serverSocketPath)
-	if err != nil {
-		if errors.Is(err, os.ErrPermission) {
-			fmt.Fprintf(os.Stderr, "access denied connecting to %s; the SSH user on the hypervisor must be in the %s group\n", serverSocketPath, serverSocketGroup)
-			return 1
-		}
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	defer conn.Close()
-
-	unixConn, _ := conn.(*net.UnixConn)
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
-		_, _ = io.Copy(conn, os.Stdin)
-		if unixConn != nil {
-			_ = unixConn.CloseWrite()
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-		_, _ = io.Copy(os.Stdout, conn)
-		if unixConn != nil {
-			_ = unixConn.CloseRead()
-		}
-	}()
-
-	wg.Wait()
-	return 0
-}
-
-func runServerInstall(args []string) int {
-	if len(args) != 0 {
-		usageServer()
-	}
-
-	if os.Geteuid() != 0 {
-		fmt.Fprintln(os.Stderr, "orchid server install must be run with sudo")
-		return 1
-	}
-
-	if err := runCommandChecked("groupadd", "--system", "--force", serverSocketGroup); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
-	if err := ensureBaseImagePresent(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
-	unit, err := serverUnitFS.ReadFile("systemd/orchid.service")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
-	unitPath := filepath.Join("/etc/systemd/system", serverUnitName)
-
-	tmpUnit, err := os.CreateTemp("", "orchid-service-*.service")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	tmpUnitPath := tmpUnit.Name()
-	if _, err := tmpUnit.Write(unit); err != nil {
-		tmpUnit.Close()
-		os.Remove(tmpUnitPath)
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	if err := tmpUnit.Close(); err != nil {
-		os.Remove(tmpUnitPath)
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	defer os.Remove(tmpUnitPath)
-
-	if err := installFile(tmpUnitPath, unitPath, 0o644); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
-	if err := runCommandChecked("systemctl", "daemon-reload"); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	if err := runCommandChecked("systemctl", "enable", "--now", serverUnitName); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	// Restart here so an existing running service picks up the refreshed unit.
-	if err := runCommandChecked("systemctl", "restart", serverUnitName); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-
-	fmt.Printf("Installed %s and refreshed it.\n", serverUnitName)
-	fmt.Println("Run `orchid server status` to confirm the daemon is active.")
-	return 0
-}
-
-func runServerBuildBase(args []string) int {
-	if len(args) != 0 {
-		usageServer()
-	}
-
-	if err := buildOrchidBaseImage(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	return 0
-}
-
 func ensureBaseImagePresent() error {
 	info, err := os.Lstat(serverBaseLink)
 	if err == nil {
@@ -464,24 +296,6 @@ func ensureBaseImagePresent() error {
 	}
 
 	return buildOrchidBaseImage()
-}
-
-func runServerStatus(args []string) int {
-	if len(args) != 0 {
-		usageServer()
-	}
-
-	active := strings.TrimSpace(runCommandOutput("systemctl", "is-active", serverUnitName))
-	enabled := strings.TrimSpace(runCommandOutput("systemctl", "is-enabled", serverUnitName))
-	if active == "" {
-		active = "unknown"
-	}
-	if enabled == "" {
-		enabled = "unknown"
-	}
-
-	fmt.Printf("%s: enabled=%s active=%s\n", serverUnitName, enabled, active)
-	return 0
 }
 
 func installFile(srcPath, dstPath string, mode os.FileMode) error {

@@ -23,7 +23,7 @@ Host setup, base image maintenance, and troubleshooting live in [docs/server.md]
 Install with Go:
 
 ```bash
-go install github.com/mrs-electronics-inc/orchid@latest
+go install github.com/mrs-electronics-inc/orchid/cmd/orchid@latest
 ```
 
 ## Config
