@@ -96,17 +96,15 @@ func newVMConnectCommand() *cobra.Command {
 		Use:   "connect <vm-name> [-- <ssh-args...>]",
 		Short: "Connect to a VM over SSH",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				_ = cmd.Help()
+				return exitCode(2)
+			}
+
 			user, _ := cmd.Flags().GetString("user")
 			hypervisor, _ := cmd.Flags().GetString("hypervisor")
 			identityFile, _ := cmd.Flags().GetString("identity-file")
-
-			runArgs := []string{
-				"--user", user,
-				"--hypervisor", hypervisor,
-				"--identity-file", identityFile,
-			}
-			runArgs = append(runArgs, args...)
-			return exitCode(runConnect(runArgs))
+			return exitCode(vmConnect(user, hypervisor, identityFile, args[0], args[1:]))
 		},
 	}
 	cmd.Flags().String("user", defaultSSHUser, "SSH user")
@@ -118,17 +116,15 @@ func newVMCreateCommand() *cobra.Command {
 		Use:   "create <repo-url>",
 		Short: "Create a new VM for a repo",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				_ = cmd.Help()
+				return exitCode(2)
+			}
+
 			name, _ := cmd.Flags().GetString("name")
 			hypervisor, _ := cmd.Flags().GetString("hypervisor")
 			identityFile, _ := cmd.Flags().GetString("identity-file")
-
-			runArgs := []string{
-				"--name", name,
-				"--hypervisor", hypervisor,
-				"--identity-file", identityFile,
-			}
-			runArgs = append(runArgs, args...)
-			return exitCode(runCreateVM(runArgs))
+			return exitCode(vmCreate(name, hypervisor, identityFile, args[0]))
 		},
 	}
 	cmd.Flags().String("name", "", "Override the VM name")
@@ -140,11 +136,13 @@ func newVMDestroyCommand() *cobra.Command {
 		Use:   "destroy <vm-name>",
 		Short: "Remove a VM and its disk artifacts",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			hypervisor, _ := cmd.Flags().GetString("hypervisor")
+			if len(args) != 1 {
+				_ = cmd.Help()
+				return exitCode(2)
+			}
 
-			runArgs := []string{"--hypervisor", hypervisor}
-			runArgs = append(runArgs, args...)
-			return exitCode(runDestroyVM(runArgs))
+			hypervisor, _ := cmd.Flags().GetString("hypervisor")
+			return exitCode(vmDestroy(hypervisor, args[0]))
 		},
 	}
 	return cmd
@@ -155,11 +153,13 @@ func newVMListCommand() *cobra.Command {
 		Use:   "list",
 		Short: "List VMs on the hypervisor",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			hypervisor, _ := cmd.Flags().GetString("hypervisor")
+			if len(args) != 0 {
+				_ = cmd.Help()
+				return exitCode(2)
+			}
 
-			runArgs := []string{"--hypervisor", hypervisor}
-			runArgs = append(runArgs, args...)
-			return exitCode(runList(runArgs))
+			hypervisor, _ := cmd.Flags().GetString("hypervisor")
+			return exitCode(vmList(hypervisor))
 		},
 	}
 	return cmd
@@ -300,20 +300,30 @@ func newServerCommand() *cobra.Command {
 			return cmd.Help()
 		},
 	}
-	cmd.AddCommand(newServerLeafCommand("install", "Install the daemon on the hypervisor"))
-	cmd.AddCommand(newServerLeafCommand("build-base", "Refresh the shared Orchid base image"))
-	cmd.AddCommand(newServerLeafCommand("proxy", "Proxy HTTP requests over SSH to the daemon"))
-	cmd.AddCommand(newServerLeafCommand("run", "Run the daemon in the foreground"))
-	cmd.AddCommand(newServerLeafCommand("status", "Show daemon status"))
+	cmd.AddCommand(newServerLeafCommand("install", "Install the daemon on the hypervisor", serverInstall))
+	cmd.AddCommand(newServerLeafCommand("build-base", "Refresh the shared Orchid base image", func() int {
+		if err := buildOrchidBaseImage(); err != nil {
+			fmt.Fprintln(cmd.ErrOrStderr(), err)
+			return 1
+		}
+		return 0
+	}))
+	cmd.AddCommand(newServerLeafCommand("proxy", "Proxy HTTP requests over SSH to the daemon", serverProxy))
+	cmd.AddCommand(newServerLeafCommand("run", "Run the daemon in the foreground", serverRun))
+	cmd.AddCommand(newServerLeafCommand("status", "Show daemon status", serverStatus))
 	return cmd
 }
 
-func newServerLeafCommand(name, short string) *cobra.Command {
+func newServerLeafCommand(name, short string, run func() int) *cobra.Command {
 	return &cobra.Command{
 		Use:   name,
 		Short: short,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return exitCode(runServer(append([]string{name}, args...)))
+			if len(args) != 0 {
+				_ = cmd.Help()
+				return exitCode(2)
+			}
+			return exitCode(run())
 		},
 	}
 }
