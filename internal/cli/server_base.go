@@ -84,9 +84,17 @@ mkdir -p /home/dev/.codex
 cat > /home/dev/.codex/config.toml <<'ORCHID_CODEX'
 approval_policy = "never"
 sandbox_mode = "danger-full-access"
+model = "gpt-5.4-mini"
+model_reasoning_effort = "high"
 
 [features]
 guardian_approval = true
+
+[plugins."github@openai-curated"]
+enabled = true
+
+[tui]
+status_line = ["model-with-reasoning", "context-remaining", "current-dir", "git-branch", "context-used", "five-hour-limit", "weekly-limit", "codex-version", "session-id"]
 ORCHID_CODEX
 chown -R dev:dev /home/dev/.codex
 `

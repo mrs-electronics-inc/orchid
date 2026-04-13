@@ -14,6 +14,12 @@ func TestBuildOrchidBaseUserDataConfiguresUserWritableNpmPrefix(t *testing.T) {
 		"prefix=/home/dev/.local",
 		"NPM_CONFIG_PREFIX=/home/dev/.local npm install -g @mariozechner/pi-coding-agent @openai/codex",
 		"chown -R dev:dev /home/dev/.local",
+		"model = \"gpt-5.4-mini\"",
+		"model_reasoning_effort = \"high\"",
+		"[plugins.\"github@openai-curated\"]",
+		"enabled = true",
+		"[tui]",
+		"status_line = [\"model-with-reasoning\", \"context-remaining\", \"current-dir\", \"git-branch\", \"context-used\", \"five-hour-limit\", \"weekly-limit\", \"codex-version\", \"session-id\"]",
 	}
 
 	for _, snippet := range wantSnippets {
@@ -24,5 +30,8 @@ func TestBuildOrchidBaseUserDataConfiguresUserWritableNpmPrefix(t *testing.T) {
 
 	if strings.Contains(userData, "NPM_CONFIG_PREFIX=/usr/local") {
 		t.Fatal("cloud-init user-data still installs codex into /usr/local")
+	}
+	if strings.Contains(userData, "[projects.") {
+		t.Fatal("cloud-init user-data should not embed per-project Codex settings")
 	}
 }
