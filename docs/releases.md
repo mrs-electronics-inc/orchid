@@ -5,7 +5,6 @@ Orchid uses a single source of truth for release versioning:
 - `VERSION` at the repo root stores the next release version, including the `v` prefix.
 - `orchid --version` prints the build version and short commit hash when available.
 - `just build` stamps dev builds with `dev` plus the current short commit.
-- `just install` stamps local installs with the version from `VERSION`.
 
 ## Draft Release
 
