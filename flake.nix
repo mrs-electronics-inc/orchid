@@ -20,8 +20,8 @@
           subPackages = [ "./cmd/orchid" ];
           ldflags = [
             "-s -w"
-            "-X github.com/mrs-electronics-inc/orchid/cmd/orchid.version=${version}"
-            "-X github.com/mrs-electronics-inc/orchid/cmd/orchid.commit=${commit}"
+            "-X main.version=${version}"
+            "-X main.commit=${commit}"
           ];
 
           meta = with pkgs.lib; {
