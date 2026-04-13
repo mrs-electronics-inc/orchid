@@ -24,7 +24,16 @@ The `Release` workflow runs when `VERSION` changes on `main`.
 
 ## Repository Setup
 
-The draft release workflow expects a GitHub App with these repository secrets:
+The draft release workflow expects a GitHub App with permission to create pull requests and repository secrets for authentication.
 
-- `RELEASE_BOT_APP_ID`
-- `RELEASE_BOT_PRIVATE_KEY`
+1. Register a GitHub App in the repository owner account or organization.
+2. Set the app name to something like `Orchid Release Bot`.
+3. Set the homepage URL to the Orchid repository URL.
+4. Disable webhooks unless you need them for other automation.
+5. Grant the app `Contents: Read and write` and `Pull requests: Read and write`.
+6. Generate a private key and download the `.pem` file.
+7. Install the app on this repository.
+8. Save the app's client ID as the repository or organization secret `RELEASE_BOT_APP_ID`.
+9. Save the downloaded private key as the repository or organization secret `RELEASE_BOT_PRIVATE_KEY`.
+
+The workflow mints a short-lived installation token on each run, so there is no long-lived PAT to rotate.

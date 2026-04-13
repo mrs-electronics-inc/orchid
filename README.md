@@ -34,8 +34,6 @@ Verify the build with:
 orchid --version
 ```
 
-Release workflow details live in [docs/release.md](docs/release.md).
-
 ## Config
 
 Configure the hypervisor once:
