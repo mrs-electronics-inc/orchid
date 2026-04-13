@@ -20,6 +20,8 @@ const (
 	baseBuilderIPRetryAttempts  = 20
 	baseBuilderSSHRetrySleep    = 5 * time.Second
 	baseBuilderSSHRetryAttempts = 60
+	baseBuilderShutdownSleep    = 5 * time.Second
+	baseBuilderShutdownAttempts = 60
 )
 
 const orchidBaseBootstrapScript = `#!/usr/bin/env bash
@@ -202,7 +204,7 @@ sudo shutdown -h now
 	}
 
 	fmt.Println("Waiting for builder VM to shut down...")
-	if err := waitForDomainState(buildVM, "shut off", 60, 2); err != nil {
+	if err := waitForDomainState(buildVM, "shut off", baseBuilderShutdownAttempts, baseBuilderShutdownSleep); err != nil {
 		return fmt.Errorf("waiting for base builder shutdown: %w", err)
 	}
 
