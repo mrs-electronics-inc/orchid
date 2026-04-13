@@ -94,7 +94,7 @@ guardian_approval = true
 enabled = true
 
 [tui]
-status_line = ["model-with-reasoning", "context-remaining", "current-dir", "git-branch", "context-used", "five-hour-limit", "weekly-limit", "codex-version", "session-id"]
+status_line = ["model-with-reasoning", "current-dir", "git-branch", "context-used", "five-hour-limit", "weekly-limit", "codex-version", "session-id"]
 ORCHID_CODEX
 chown -R dev:dev /home/dev/.codex
 `
