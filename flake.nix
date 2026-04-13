@@ -10,12 +10,19 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        version = builtins.replaceStrings ["\n"] [""] (builtins.readFile ./VERSION);
+        commit = if self ? rev then builtins.substring 0 7 self.rev else "unknown";
         orchid = pkgs.buildGoModule {
           pname = "orchid";
-          version = "0.1.0";
+          inherit version;
           src = ./.;
           vendorHash = "sha256-KcwQhDiW2OjMw0OA0cYZGdLJhA+KrsBjH2WqeKHqU6U=";
-          subPackages = [ "." ];
+          subPackages = [ "./cmd/orchid" ];
+          ldflags = [
+            "-s -w"
+            "-X github.com/mrs-electronics-inc/orchid/cmd/orchid.version=${version}"
+            "-X github.com/mrs-electronics-inc/orchid/cmd/orchid.commit=${commit}"
+          ];
 
           meta = with pkgs.lib; {
             description = "Orchid VM manager";
