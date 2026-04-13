@@ -34,7 +34,7 @@ Verify the build with:
 orchid --version
 ```
 
-Release workflow details live in [docs/releases.md](docs/releases.md).
+Release workflow details live in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Config
 

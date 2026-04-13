@@ -9,6 +9,8 @@ import (
 )
 
 var (
+	// main injects build metadata here before CLI setup runs. Tests can call
+	// SetVersion directly so version behavior stays deterministic.
 	version = ""
 	commit  = ""
 )
@@ -18,6 +20,9 @@ func SetVersion(versionValue, commitValue string) {
 	commit = strings.TrimSpace(commitValue)
 }
 
+// configureVersion turns the injected build metadata into Cobra's built-in
+// version output and keeps the flag format consistent across release builds,
+// local builds, and tests.
 func configureVersion(cmd *cobra.Command) {
 	versionValue, commitValue := effectiveVersion()
 	if commitValue == "" {

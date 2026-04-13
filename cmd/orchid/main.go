@@ -7,6 +7,8 @@ import (
 )
 
 var (
+	// Build scripts inject these at link time so release binaries can report
+	// their version and commit without any extra runtime configuration.
 	version = ""
 	commit  = ""
 )
