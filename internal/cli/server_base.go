@@ -38,7 +38,7 @@ if ! grep -q '^experimental-features = .*flakes' /etc/nix/nix.conf 2>/dev/null; 
 fi
 
 cat > /etc/profile.d/orchid-path.sh <<'ORCHID_PATH'
-export PATH="/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:/usr/local/bin:${PATH}"
+export PATH="${HOME}/.local/bin:/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:/usr/local/bin:${PATH}"
 ORCHID_PATH
 chmod 0644 /etc/profile.d/orchid-path.sh
 
@@ -52,12 +52,21 @@ ln -sf /usr/bin/fdfind /usr/local/bin/fd
 rm -rf /usr/local/share/oh-my-zsh
 git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git /usr/local/share/oh-my-zsh
 
-NPM_CONFIG_PREFIX=/usr/local npm install -g @mariozechner/pi-coding-agent @openai/codex
+mkdir -p /home/dev/.local
+chown dev:dev /home/dev/.local
+
+cat > /home/dev/.npmrc <<'ORCHID_NPMRC'
+prefix=/home/dev/.local
+ORCHID_NPMRC
+chown dev:dev /home/dev/.npmrc
+
+NPM_CONFIG_PREFIX=/home/dev/.local npm install -g @mariozechner/pi-coding-agent @openai/codex
+chown -R dev:dev /home/dev/.local
 
 usermod -s /usr/bin/zsh dev
 
 cat > /home/dev/.zshenv <<'ORCHID_ZSHENV'
-export PATH="/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:/usr/local/bin:${PATH}"
+export PATH="${HOME}/.local/bin:/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:/usr/local/bin:${PATH}"
 ORCHID_ZSHENV
 chown dev:dev /home/dev/.zshenv
 

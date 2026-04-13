@@ -74,8 +74,11 @@ Orchid uses a two-stage image pipeline:
    - Codex CLI
    - zsh with the `robbyrussell` theme
    - `direnv`
+   - a user-writable npm global prefix at `/home/dev/.local`
    - default Codex config in `~/.codex/config.toml`
    - `git`, `curl`, `helix`, `zellij`, `fd`, and `ripgrep`
+
+   This lets `dev` install npm-based CLIs globally without `sudo` or extra config.
 3. Per-VM overlay
    Created for each repo and used only for repo checkout, repo-specific closures, and transient build output.
 
