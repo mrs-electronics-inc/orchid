@@ -7,6 +7,28 @@ import (
 	"time"
 )
 
+func TestBuildCreateVMUserDataExplainsGitCloneAuthFailures(t *testing.T) {
+	userData := buildCreateVMUserData(
+		"example-vm",
+		"example-repo",
+		"example.com",
+		"git@example.com:org/example-repo.git",
+		"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexample test@example",
+		"-----BEGIN OPENSSH PRIVATE KEY-----\nexample\n-----END OPENSSH PRIVATE KEY-----",
+	)
+
+	wantSnippets := []string{
+		"orchid: git clone failed.",
+		"if this is a private repository, make sure the SSH identity configured with `orchid config set identity-file <path>` has access, then add its public key to your account SSH keys and retry.",
+	}
+
+	for _, snippet := range wantSnippets {
+		if !strings.Contains(userData, snippet) {
+			t.Fatalf("cloud-init user-data missing %q", snippet)
+		}
+	}
+}
+
 func TestWaitForGuestCloudInitRetriesTransientSSHErrors(t *testing.T) {
 	originalTry := tryGuestCommandDirectFunc
 	originalSleep := sleepFunc
