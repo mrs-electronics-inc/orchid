@@ -96,7 +96,7 @@ func buildCreateVMUserData(vmName, repoName, repoHost, repoURL, publicKey, priva
 	b.WriteString(shellQuote(repoURL))
 	b.WriteString(" ")
 	b.WriteString(shellQuote("/home/dev/" + repoName))
-	b.WriteString("\"\n")
+	b.WriteString(" || { echo 'orchid: git clone failed.' >&2; echo 'orchid: if this is a private repository, make sure the SSH identity configured with `orchid config set identity-file <path>` has access, then add its public key to your account SSH keys and retry.' >&2; exit 1; }\"\n")
 	b.WriteString("  - su - dev -c \"printf '.direnv/\\n' >> ")
 	b.WriteString(shellQuote("/home/dev/" + repoName + "/.git/info/exclude"))
 	b.WriteString("\" || true\n")
