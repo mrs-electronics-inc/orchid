@@ -45,7 +45,7 @@ ORCHID_PATH
 chmod 0644 /etc/profile.d/orchid-path.sh
 
 export PATH="/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:${PATH}"
-nix profile install nixpkgs#helix nixpkgs#zellij nixpkgs#nodejs nixpkgs#go
+nix profile install nixpkgs#helix nixpkgs#zellij nixpkgs#nodejs nixpkgs#go nixpkgs#just
 
 systemctl enable --now qemu-guest-agent
 
@@ -291,7 +291,7 @@ func buildOrchidBaseUserData(publicKey string) string {
 	b.WriteString(publicKey)
 	b.WriteString("\n")
 	b.WriteString("packages:\n")
-	for _, pkg := range []string{"git", "curl", "locales", "xz-utils", "ripgrep", "fd-find", "zsh", "direnv", "qemu-guest-agent"} {
+	for _, pkg := range []string{"git", "curl", "locales", "xz-utils", "ripgrep", "fd-find", "zsh", "direnv", "qemu-guest-agent", "just"} {
 		b.WriteString("  - ")
 		b.WriteString(pkg)
 		b.WriteString("\n")

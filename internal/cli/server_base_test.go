@@ -12,6 +12,7 @@ func TestBuildOrchidBaseUserDataConfiguresUserWritableNpmPrefix(t *testing.T) {
 		"export PATH=\"${HOME}/.local/bin:/nix/var/nix/profiles/default/bin:/nix/var/nix/profiles/default/sbin:/usr/local/bin:${PATH}\"",
 		"mkdir -p /home/dev/.local",
 		"prefix=/home/dev/.local",
+		"nixpkgs#just",
 		"NPM_CONFIG_PREFIX=/home/dev/.local npm install -g @mariozechner/pi-coding-agent @openai/codex",
 		"HOME=/home/dev PATH=\"/home/dev/.local/bin:${PATH}\" bash -c 'curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash -s -- --skip-setup'",
 		"chown -R dev:dev /home/dev",
