@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -31,6 +32,8 @@ var serverUnitFS embed.FS
 var serverJobStore = newDaemonJobStore()
 
 func serveOrchidDaemon() error {
+	log.Printf("orchid daemon starting uid=%d euid=%d", os.Getuid(), os.Geteuid())
+
 	if err := os.MkdirAll(filepath.Dir(serverSocketPath), 0o755); err != nil {
 		return fmt.Errorf("creating %s: %w", filepath.Dir(serverSocketPath), err)
 	}

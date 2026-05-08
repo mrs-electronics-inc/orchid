@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -111,6 +112,15 @@ func runCreateVMJob(job *daemonJob, req daemonCreateVMRequest) {
 	}
 
 	job.update(daemonJobStateRunning, daemonJobStageStartingVM, "starting VM", vmName, "")
+	log.Printf(
+		"starting VM %s virtType=%s kvmAvailable=%t base=%s disk=%s seedISO=%s",
+		vmName,
+		virtType,
+		virtType == "kvm",
+		base,
+		vmDisk,
+		seedISO,
+	)
 	if _, err := runLocalCommand("virt-install",
 		"--connect", "qemu:///system",
 		"--virt-type", virtType,
@@ -128,6 +138,8 @@ func runCreateVMJob(job *daemonJob, req daemonCreateVMRequest) {
 		"--noautoconsole",
 		"--import",
 	); err != nil {
+		log.Printf("starting VM %s failed: %v", vmName, err)
+		logVirshDiagnostics("starting VM")
 		job.fail(daemonJobStageStartingVM, "starting VM", err.Error())
 		return
 	}
@@ -190,6 +202,56 @@ func runLocalCommand(args ...string) (string, error) {
 		return "", fmt.Errorf("%s failed: %s", strings.Join(args, " "), trimmed)
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+var (
+	capsHostArchRe   = regexp.MustCompile(`(?s)<host>.*?<cpu>.*?<arch>([^<]+)</arch>`)
+	capsGuestArchRe  = regexp.MustCompile(`(?s)<guest>.*?<arch name='([^']+)'>`)
+	capsDomainTypeRe = regexp.MustCompile(`(?s)<domain type='([^']+)'>`)
+)
+
+func logVirshDiagnostics(context string) {
+	if uri, err := runLocalCommand("virsh", "-c", "qemu:///system", "uri"); err == nil {
+		log.Printf("%s libvirt uri=%q", context, strings.TrimSpace(uri))
+	} else {
+		log.Printf("%s libvirt uri unavailable: %v", context, err)
+	}
+
+	caps, err := runLocalCommand("virsh", "-c", "qemu:///system", "capabilities")
+	if err != nil {
+		log.Printf("%s libvirt capabilities unavailable: %v", context, err)
+		return
+	}
+
+	hostArch := ""
+	if match := capsHostArchRe.FindStringSubmatch(caps); len(match) == 2 {
+		hostArch = match[1]
+	}
+
+	guestArchs := uniqueStrings(capsGuestArchRe.FindAllStringSubmatch(caps, -1), 1)
+	domainTypes := uniqueStrings(capsDomainTypeRe.FindAllStringSubmatch(caps, -1), 1)
+
+	log.Printf("%s libvirt capabilities host_arch=%q guest_arches=%v domain_types=%v", context, hostArch, guestArchs, domainTypes)
+}
+
+func uniqueStrings(matches [][]string, index int) []string {
+	seen := make(map[string]struct{}, len(matches))
+	values := make([]string, 0, len(matches))
+	for _, match := range matches {
+		if len(match) <= index {
+			continue
+		}
+		value := match[index]
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		values = append(values, value)
+	}
+	return values
 }
 
 func resolveSharedBaseImage() (string, error) {
