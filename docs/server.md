@@ -42,7 +42,7 @@ Use `orchid server status` on the host to confirm the service state, `orchid ser
 
 ## Troubleshooting
 
-If `sudo orchid server build-base` fails with `Host does not support any virtualization options` or `Unable to start event thread: Resource temporarily unavailable`, libvirtd is probably hitting a systemd task limit on the host. Increase the service limit and restart libvirtd:
+If `sudo orchid server build-base` fails with `Host does not support any virtualization options` or `Unable to start event thread: Resource temporarily unavailable`, libvirtd is probably hitting a systemd task limit on the host. Increase the service limit and restart libvirtd. We currently recommend `131072`:
 
 ```bash
 sudo systemctl edit libvirtd
@@ -50,7 +50,7 @@ sudo systemctl edit libvirtd
 
 ```ini
 [Service]
-TasksMax=65536
+TasksMax=131072
 ```
 
 ```bash

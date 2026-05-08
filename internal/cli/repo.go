@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"os/user"
 	"strings"
@@ -57,10 +56,6 @@ func repoSSHURL(repoURL string) string {
 }
 
 func readPublicKey(identityFile string) (string, error) {
-	if data, err := os.ReadFile(identityFile + ".pub"); err == nil {
-		return strings.TrimSpace(string(data)), nil
-	}
-
 	cmd := exec.Command("ssh-keygen", "-y", "-f", identityFile)
 	output, err := cmd.CombinedOutput()
 	if err != nil {

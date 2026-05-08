@@ -2,13 +2,13 @@ package cli
 
 import (
 	"bytes"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -204,12 +204,6 @@ func runLocalCommand(args ...string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-var (
-	capsHostArchRe   = regexp.MustCompile(`(?s)<host>.*?<cpu>.*?<arch>([^<]+)</arch>`)
-	capsGuestArchRe  = regexp.MustCompile(`(?s)<guest>.*?<arch name='([^']+)'>`)
-	capsDomainTypeRe = regexp.MustCompile(`(?s)<domain type='([^']+)'>`)
-)
-
 func logVirshDiagnostics(context string) {
 	if uri, err := runLocalCommand("virsh", "-c", "qemu:///system", "uri"); err == nil {
 		log.Printf("%s libvirt uri=%q", context, strings.TrimSpace(uri))
@@ -223,35 +217,69 @@ func logVirshDiagnostics(context string) {
 		return
 	}
 
-	hostArch := ""
-	if match := capsHostArchRe.FindStringSubmatch(caps); len(match) == 2 {
-		hostArch = match[1]
+	capsInfo, err := parseLibvirtCapabilities(caps)
+	if err != nil {
+		log.Printf("%s libvirt capabilities parse failed: %v", context, err)
+		return
 	}
 
-	guestArchs := uniqueStrings(capsGuestArchRe.FindAllStringSubmatch(caps, -1), 1)
-	domainTypes := uniqueStrings(capsDomainTypeRe.FindAllStringSubmatch(caps, -1), 1)
-
-	log.Printf("%s libvirt capabilities host_arch=%q guest_arches=%v domain_types=%v", context, hostArch, guestArchs, domainTypes)
+	log.Printf("%s libvirt capabilities host_arch=%q guest_arches=%v domain_types=%v", context, capsInfo.HostArch, capsInfo.GuestArchs, capsInfo.DomainTypes)
 }
 
-func uniqueStrings(matches [][]string, index int) []string {
-	seen := make(map[string]struct{}, len(matches))
-	values := make([]string, 0, len(matches))
-	for _, match := range matches {
-		if len(match) <= index {
-			continue
-		}
-		value := match[index]
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		values = append(values, value)
+type libvirtCapabilities struct {
+	HostArch    string
+	GuestArchs  []string
+	DomainTypes []string
+}
+
+type libvirtCapabilitiesXML struct {
+	Host struct {
+		CPU struct {
+			Arch string `xml:"arch"`
+		} `xml:"cpu"`
+	} `xml:"host"`
+	Guests []struct {
+		Arch struct {
+			Name    string `xml:"name,attr"`
+			Domains []struct {
+				Type string `xml:"type,attr"`
+			} `xml:"domain"`
+		} `xml:"arch"`
+	} `xml:"guest"`
+}
+
+func parseLibvirtCapabilities(data string) (libvirtCapabilities, error) {
+	var decoded libvirtCapabilitiesXML
+	if err := xml.Unmarshal([]byte(data), &decoded); err != nil {
+		return libvirtCapabilities{}, err
 	}
-	return values
+
+	caps := libvirtCapabilities{
+		HostArch: decoded.Host.CPU.Arch,
+	}
+
+	seenArch := make(map[string]struct{})
+	seenDomain := make(map[string]struct{})
+	for _, guest := range decoded.Guests {
+		if guest.Arch.Name != "" {
+			if _, ok := seenArch[guest.Arch.Name]; !ok {
+				seenArch[guest.Arch.Name] = struct{}{}
+				caps.GuestArchs = append(caps.GuestArchs, guest.Arch.Name)
+			}
+		}
+		for _, domain := range guest.Arch.Domains {
+			if domain.Type == "" {
+				continue
+			}
+			if _, ok := seenDomain[domain.Type]; ok {
+				continue
+			}
+			seenDomain[domain.Type] = struct{}{}
+			caps.DomainTypes = append(caps.DomainTypes, domain.Type)
+		}
+	}
+
+	return caps, nil
 }
 
 func resolveSharedBaseImage() (string, error) {

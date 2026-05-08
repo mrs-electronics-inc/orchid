@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -117,11 +118,11 @@ func TestVMCreateDoesNotWriteConfig(t *testing.T) {
 
 	identityDir := t.TempDir()
 	identityFile := filepath.Join(identityDir, "id_orchid")
-	if err := os.WriteFile(identityFile, []byte("PRIVATE KEY\n"), 0o600); err != nil {
-		t.Fatalf("writing identity file: %v", err)
+	if _, err := exec.LookPath("ssh-keygen"); err != nil {
+		t.Skip("ssh-keygen not available")
 	}
-	if err := os.WriteFile(identityFile+".pub", []byte("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexample test@example\n"), 0o600); err != nil {
-		t.Fatalf("writing public key: %v", err)
+	if output, err := exec.Command("ssh-keygen", "-t", "ed25519", "-N", "", "-f", identityFile, "-C", "orchid-test").CombinedOutput(); err != nil {
+		t.Fatalf("generating identity key failed: %v\n%s", err, strings.TrimSpace(string(output)))
 	}
 
 	originalSubmit := submitDaemonCreateVMFunc
