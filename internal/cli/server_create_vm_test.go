@@ -20,6 +20,7 @@ func TestBuildCreateVMUserDataExplainsGitCloneAuthFailures(t *testing.T) {
 	wantSnippets := []string{
 		"orchid: git clone failed.",
 		"if this is a private repository, make sure the SSH private key configured with `orchid config set identity-file <path>` can access the repo, then add its public key to your account SSH keys and retry.",
+		"/home/dev/.ssh/authorized_keys",
 	}
 
 	for _, snippet := range wantSnippets {
