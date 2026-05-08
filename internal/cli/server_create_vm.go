@@ -52,6 +52,7 @@ func runCreateVMJob(job *daemonJob, req daemonCreateVMRequest) {
 	repoName := repoNameFromURL(req.RepoURL)
 	repoHost := repoHostFromURL(req.RepoURL)
 	cloneURL := repoSSHURL(req.RepoURL)
+	identityFingerprint := ""
 
 	job.update(daemonJobStateRunning, daemonJobStageValidatingRequest, "validating create-vm request", vmName, "")
 
@@ -66,6 +67,12 @@ func runCreateVMJob(job *daemonJob, req daemonCreateVMRequest) {
 	if err := os.WriteFile(privateKeyPath, []byte(req.PrivateKey), 0o600); err != nil {
 		job.fail(daemonJobStageValidatingRequest, "writing private key", err.Error())
 		return
+	}
+	if fingerprint, err := runLocalCommand("ssh-keygen", "-lf", privateKeyPath); err == nil {
+		identityFingerprint = strings.TrimSpace(fingerprint)
+		log.Printf("create VM %s identity fingerprint=%s", vmName, identityFingerprint)
+	} else {
+		log.Printf("create VM %s identity fingerprint unavailable: %v", vmName, err)
 	}
 
 	userDataPath := filepath.Join(tmpDir, "user-data")
@@ -162,7 +169,7 @@ func runCreateVMJob(job *daemonJob, req daemonCreateVMRequest) {
 	job.update(daemonJobStateRunning, daemonJobStageWaitingForIP, "VM has an IP address", vmName, ip)
 
 	job.update(daemonJobStateRunning, daemonJobStageWaitingForSSH, "waiting for SSH", vmName, ip)
-	if err := waitForGuestSSHDirect(ip, privateKeyPath, createVMRetryAttempts, createVMRetrySleep); err != nil {
+	if err := waitForGuestSSHDirect(vmName, ip, privateKeyPath, identityFingerprint, createVMRetryAttempts, createVMRetrySleep); err != nil {
 		job.fail(daemonJobStageWaitingForSSH, "waiting for SSH", err.Error())
 		return
 	}
@@ -381,8 +388,12 @@ func waitForDaemonVMIP(vmName string, attempts int, sleep time.Duration) (string
 	return "", lastErr
 }
 
-func waitForGuestSSHDirect(ip, identityFile string, attempts int, sleep time.Duration) error {
-	return pollGuestCommandDirect(ip, identityFile, attempts, sleep, "true")
+func waitForGuestSSHDirect(vmName, ip, identityFile, identityFingerprint string, attempts int, sleep time.Duration) error {
+	err := pollGuestCommandDirect(ip, identityFile, attempts, sleep, "true")
+	if err != nil && isGuestSSHAuthError(err) {
+		return fmt.Errorf("%w\nhint: the guest rejected the SSH key used for %s. fingerprint=%s\nhint: if the VM disk was reused, destroy the VM and recreate it; otherwise inspect cloud-init and the guest authorized_keys setup", err, vmName, safeFingerprint(identityFingerprint))
+	}
+	return err
 }
 
 func waitForGuestCloudInit(ip, identityFile string) error {
@@ -472,4 +483,26 @@ func isTransientSSHError(err error) bool {
 	default:
 		return false
 	}
+}
+
+func isGuestSSHAuthError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "permission denied (publickey)"),
+		strings.Contains(msg, "too many authentication failures"),
+		strings.Contains(msg, "no supported authentication methods available"):
+		return true
+	default:
+		return false
+	}
+}
+
+func safeFingerprint(fingerprint string) string {
+	if strings.TrimSpace(fingerprint) == "" {
+		return "unavailable"
+	}
+	return fingerprint
 }
