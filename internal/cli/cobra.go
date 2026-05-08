@@ -82,8 +82,8 @@ orchid vm destroy dev-repo`,
 			return cmd.Help()
 		},
 	}
-	cmd.PersistentFlags().String("hypervisor", "", "SSH host for the libvirt hypervisor")
-	cmd.PersistentFlags().String("identity-file", "", "SSH private key used for VM login and git access")
+	cmd.PersistentFlags().String("hypervisor", "", "SSH host of the Linux machine running the Orchid daemon and libvirt")
+	cmd.PersistentFlags().String("identity-file", "", "SSH private key with access to the git repos you will use")
 
 	cmd.AddCommand(newVMConnectCommand())
 	cmd.AddCommand(newVMCreateCommand())
@@ -170,7 +170,7 @@ func newConfigCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
 		Short: "Manage the local Orchid configuration",
-		Long:  "The config command stores and queries the hypervisor host and SSH identity used by vm commands.",
+		Long:  "The config command stores and queries the SSH host of the hypervisor machine and the SSH private key used by vm commands.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
 		},

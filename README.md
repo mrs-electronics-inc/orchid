@@ -38,11 +38,15 @@ orchid --version
 
 Configure the hypervisor once:
 
+Set this to the SSH host of the Linux machine that runs the Orchid daemon and libvirt.
+
 ```bash
 orchid config set hypervisor <hypervisor-host>
 ```
 
 Configure the SSH identity once:
+
+Set this to the path of your private SSH key with access to the git repositories you plan to use. Orchid uses it for VM login and for cloning the repo on the hypervisor.
 
 ```bash
 orchid config set identity-file <path-to-identity>
