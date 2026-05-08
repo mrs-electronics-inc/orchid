@@ -16,7 +16,7 @@ VM lifecycle commands live under `orchid vm`.
 
 ## Server Docs
 
-Host setup, base image maintenance, and troubleshooting live in [docs/server.md](docs/server.md). The SSH user that proxies to the hypervisor daemon must be in the `orchid` group.
+Host setup, base image maintenance, and troubleshooting live in [docs/server.md](docs/server.md).
 
 ## Install
 
@@ -58,6 +58,13 @@ identity_file = "<path-to-identity>"
 ## Create Virtual Machine
 
 `orchid vm create` runs on your laptop, talks to the configured hypervisor daemon, derives the VM name, and submits a job to provision a VM from the shared Orchid base image. By default, VM names are prefixed by the local username so different developers do not collide.
+
+> [!NOTE]
+> If `orchid vm create` fails with `access denied`, make sure the SSH user that proxies to the hypervisor daemon is in the `orchid` group.
+> ```bash
+> sudo usermod -aG orchid <username>
+> ```
+> Log out and back in after changing group membership.
 
 ```bash
 orchid vm create <repo-url>
