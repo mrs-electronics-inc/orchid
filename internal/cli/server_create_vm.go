@@ -389,11 +389,27 @@ func waitForDaemonVMIP(vmName string, attempts int, sleep time.Duration) (string
 }
 
 func waitForGuestSSHDirect(vmName, ip, identityFile, identityFingerprint string, attempts int, sleep time.Duration) error {
-	err := pollGuestCommandDirect(ip, identityFile, attempts, sleep, "true")
-	if err != nil && isGuestSSHAuthError(err) {
-		return fmt.Errorf("%w\nhint: the guest rejected the SSH key used for %s. fingerprint=%s\nhint: if the VM disk was reused, destroy the VM and recreate it; otherwise inspect cloud-init and the guest authorized_keys setup", err, vmName, safeFingerprint(identityFingerprint))
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		if err := tryGuestCommandDirectFunc(ip, identityFile, "true"); err == nil {
+			return nil
+		} else {
+			lastErr = err
+			if !isTransientSSHError(err) && !isGuestSSHAuthError(err) {
+				return err
+			}
+		}
+		if attempt < attempts {
+			sleepFunc(sleep)
+		}
 	}
-	return err
+	if lastErr != nil && isGuestSSHAuthError(lastErr) {
+		return fmt.Errorf("%w\nhint: the guest rejected the SSH key used for %s. fingerprint=%s\nhint: if the VM disk was reused, destroy the VM and recreate it; otherwise inspect cloud-init and the guest authorized_keys setup", lastErr, vmName, safeFingerprint(identityFingerprint))
+	}
+	if lastErr == nil {
+		return fmt.Errorf("ssh to %s is not ready", ip)
+	}
+	return lastErr
 }
 
 func waitForGuestCloudInit(ip, identityFile string) error {
@@ -401,7 +417,7 @@ func waitForGuestCloudInit(ip, identityFile string) error {
 	for attempt := 1; attempt <= createVMRetryAttempts; attempt++ {
 		if err := tryGuestCommandDirectFunc(ip, identityFile, "sudo", "cloud-init", "status", "--wait"); err == nil {
 			return nil
-		} else if !isTransientSSHError(err) {
+		} else if !isTransientSSHError(err) && !isGuestSSHAuthError(err) {
 			return err
 		} else {
 			lastErr = err

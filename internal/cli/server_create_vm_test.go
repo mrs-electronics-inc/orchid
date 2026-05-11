@@ -59,6 +59,32 @@ func TestWaitForGuestCloudInitRetriesTransientSSHErrors(t *testing.T) {
 	}
 }
 
+func TestWaitForGuestSSHDirectRetriesAuthErrors(t *testing.T) {
+	originalTry := tryGuestCommandDirectFunc
+	originalSleep := sleepFunc
+	defer func() {
+		tryGuestCommandDirectFunc = originalTry
+		sleepFunc = originalSleep
+	}()
+
+	var calls int
+	tryGuestCommandDirectFunc = func(ip, identityFile string, remoteArgs ...string) error {
+		calls++
+		if calls == 1 {
+			return fmt.Errorf("ssh to %s failed: dev@%s: Permission denied (publickey).", ip, ip)
+		}
+		return nil
+	}
+	sleepFunc = func(time.Duration) {}
+
+	if err := waitForGuestSSHDirect("demo-vm", "192.168.122.43", "/tmp/id", "fingerprint", 3, time.Second); err != nil {
+		t.Fatalf("waitForGuestSSHDirect returned error: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("waitForGuestSSHDirect calls = %d, want 2", calls)
+	}
+}
+
 func TestWaitForGuestCloudInitFailsFastOnNonTransientErrors(t *testing.T) {
 	originalTry := tryGuestCommandDirectFunc
 	originalSleep := sleepFunc
@@ -83,6 +109,32 @@ func TestWaitForGuestCloudInitFailsFastOnNonTransientErrors(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "cloud-init status --wait") {
 		t.Fatalf("waitForGuestCloudInit error = %q, want cloud-init failure", err)
+	}
+}
+
+func TestWaitForGuestCloudInitRetriesAuthErrors(t *testing.T) {
+	originalTry := tryGuestCommandDirectFunc
+	originalSleep := sleepFunc
+	defer func() {
+		tryGuestCommandDirectFunc = originalTry
+		sleepFunc = originalSleep
+	}()
+
+	var calls int
+	tryGuestCommandDirectFunc = func(ip, identityFile string, remoteArgs ...string) error {
+		calls++
+		if calls == 1 {
+			return fmt.Errorf("ssh to %s failed: dev@%s: Permission denied (publickey).", ip, ip)
+		}
+		return nil
+	}
+	sleepFunc = func(time.Duration) {}
+
+	if err := waitForGuestCloudInit("192.168.122.43", "/tmp/id"); err != nil {
+		t.Fatalf("waitForGuestCloudInit returned error: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("waitForGuestCloudInit calls = %d, want 2", calls)
 	}
 }
 
