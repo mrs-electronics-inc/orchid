@@ -24,6 +24,7 @@ func TestBuildCreateVMUserDataExplainsGitCloneAuthFailures(t *testing.T) {
 		"install -d -m 0700 -o dev -g dev /home/dev/.ssh",
 		"cat > /home/dev/.ssh/authorized_keys <<'ORCHID_AUTHKEY'",
 		"chmod 0600 /home/dev/.ssh/authorized_keys",
+		"bootcmd:\n",
 	}
 
 	for _, snippet := range wantSnippets {
