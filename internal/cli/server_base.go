@@ -188,6 +188,9 @@ func buildOrchidBaseImage() error {
 
 	fmt.Println("Waiting for cloud-init to finish...")
 	if err := runSSHKeyCommand(ip, builderKeyPath, "sudo", "cloud-init", "status", "--wait"); err != nil {
+		if diagnostics, diagErr := collectBaseBuilderDiagnostics(ip, builderKeyPath); diagErr == nil && strings.TrimSpace(diagnostics) != "" {
+			return fmt.Errorf("waiting for base builder cloud-init: %w\n\nguest logs:\n%s", err, diagnostics)
+		}
 		return fmt.Errorf("waiting for base builder cloud-init: %w", err)
 	}
 
@@ -334,6 +337,38 @@ func waitForSSHKey(ip, identityFile string, attempts int, sleep time.Duration) e
 		return fmt.Errorf("ssh to %s is not ready", ip)
 	}
 	return lastErr
+}
+
+func collectBaseBuilderDiagnostics(ip, identityFile string) (string, error) {
+	var b strings.Builder
+	logFiles := []string{
+		"/var/log/orchid-bootstrap.log",
+		"/var/log/cloud-init-output.log",
+		"/var/log/cloud-init.log",
+	}
+
+	for _, path := range logFiles {
+		if b.Len() > 0 {
+			b.WriteString("\n\n")
+		}
+		b.WriteString("== ")
+		b.WriteString(path)
+		b.WriteString(" ==\n")
+
+		output, err := runSSHKeyCommandOutput(ip, identityFile, "sh", "-lc", fmt.Sprintf("if [ -f %s ]; then tail -n 200 %s; else echo missing; fi", shellQuote(path), shellQuote(path)))
+		if err != nil {
+			return "", err
+		}
+
+		trimmed := strings.TrimSpace(output)
+		if trimmed == "" {
+			b.WriteString("(empty)")
+			continue
+		}
+		b.WriteString(trimmed)
+	}
+
+	return b.String(), nil
 }
 
 func runSSHKeyCommand(ip, identityFile string, remoteArgs ...string) error {
