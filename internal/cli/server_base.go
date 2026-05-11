@@ -294,7 +294,7 @@ func buildOrchidBaseUserData(publicKey string) string {
 	b.WriteString(publicKey)
 	b.WriteString("\n")
 	b.WriteString("packages:\n")
-	for _, pkg := range []string{"git", "curl", "locales", "xz-utils", "ripgrep", "fd-find", "zsh", "direnv", "qemu-guest-agent", "just"} {
+	for _, pkg := range []string{"git", "curl", "locales", "xz-utils", "ripgrep", "fd-find", "zsh", "direnv", "qemu-guest-agent"} {
 		b.WriteString("  - ")
 		b.WriteString(pkg)
 		b.WriteString("\n")

@@ -33,6 +33,9 @@ func TestBuildOrchidBaseUserDataConfiguresUserWritableNpmPrefix(t *testing.T) {
 	if strings.Contains(userData, "NPM_CONFIG_PREFIX=/usr/local") {
 		t.Fatal("cloud-init user-data still installs codex into /usr/local")
 	}
+	if strings.Contains(userData, "  - just\n") {
+		t.Fatal("cloud-init user-data should not install just via apt; nix profile already covers it")
+	}
 	if strings.Contains(userData, "[projects.") {
 		t.Fatal("cloud-init user-data should not embed per-project Codex settings")
 	}
