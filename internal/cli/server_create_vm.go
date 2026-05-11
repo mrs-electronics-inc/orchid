@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -474,7 +476,142 @@ func guestAuthorizedKeysDiagnostics(vmName, user, expectedPublicKey string) stri
 		b.WriteString("\nexpected key present: ")
 		b.WriteString(fmt.Sprint(strings.Contains(output, expectedPublicKey)))
 	}
+
+	guestState, err := guestAgentStateDiagnostics(vmName)
+	if err != nil {
+		b.WriteString("\nguest agent diagnostics failed: ")
+		b.WriteString(err.Error())
+	} else if strings.TrimSpace(guestState) != "" {
+		b.WriteString("\n\nguest state:\n")
+		b.WriteString(guestState)
+	}
 	return b.String()
+}
+
+type guestAgentExecResponse struct {
+	Return struct {
+		Pid int `json:"pid"`
+	} `json:"return"`
+}
+
+type guestAgentExecStatusResponse struct {
+	Return struct {
+		Exited   bool   `json:"exited"`
+		ExitCode int    `json:"exitcode"`
+		OutData  string `json:"out-data"`
+		ErrData  string `json:"err-data"`
+	} `json:"return"`
+}
+
+func guestAgentStateDiagnostics(vmName string) (string, error) {
+	script := strings.TrimSpace(`
+set -eu
+echo "== id dev =="
+id dev || true
+echo "== passwd =="
+getent passwd dev || true
+echo "== home =="
+stat -c '%U:%G %a %n' /home/dev /home/dev/.ssh /home/dev/.ssh/authorized_keys 2>/dev/null || true
+echo "== authorized_keys =="
+sed -n '1,20p' /home/dev/.ssh/authorized_keys 2>/dev/null || true
+echo "== sshd config =="
+grep -nE '^(AuthorizedKeysFile|PubkeyAuthentication|PasswordAuthentication|PermitRootLogin)' /etc/ssh/sshd_config 2>/dev/null || true
+echo "== sshd status =="
+systemctl is-active sshd 2>/dev/null || true
+echo "== auth log =="
+tail -n 80 /var/log/auth.log 2>/dev/null || true
+echo "== cloud-init log =="
+tail -n 80 /var/log/cloud-init.log 2>/dev/null || true
+`)
+
+	out, err := runGuestAgentShellCommand(vmName, script)
+	if err != nil {
+		return "", err
+	}
+	return out, nil
+}
+
+func runGuestAgentShellCommand(vmName, script string) (string, error) {
+	request := map[string]any{
+		"execute": "guest-exec",
+		"arguments": map[string]any{
+			"path":           "/bin/sh",
+			"arg":            []string{"-lc", script},
+			"capture-output": true,
+		},
+	}
+	requestJSON, err := json.Marshal(request)
+	if err != nil {
+		return "", fmt.Errorf("encoding guest-exec request: %w", err)
+	}
+
+	output, err := runVirshCommandFunc("qemu-agent-command", vmName, string(requestJSON))
+	if err != nil {
+		return "", err
+	}
+
+	var execResp guestAgentExecResponse
+	if err := json.Unmarshal([]byte(output), &execResp); err != nil {
+		return "", fmt.Errorf("parsing guest-exec response: %w", err)
+	}
+	if execResp.Return.Pid == 0 {
+		return "", fmt.Errorf("guest-exec response missing pid")
+	}
+
+	const statusAttempts = 20
+	for attempt := 1; attempt <= statusAttempts; attempt++ {
+		statusReq := map[string]any{
+			"execute": "guest-exec-status",
+			"arguments": map[string]any{
+				"pid": execResp.Return.Pid,
+			},
+		}
+		statusJSON, err := json.Marshal(statusReq)
+		if err != nil {
+			return "", fmt.Errorf("encoding guest-exec-status request: %w", err)
+		}
+
+		statusOutput, err := runVirshCommandFunc("qemu-agent-command", vmName, string(statusJSON))
+		if err != nil {
+			return "", err
+		}
+
+		var statusResp guestAgentExecStatusResponse
+		if err := json.Unmarshal([]byte(statusOutput), &statusResp); err != nil {
+			return "", fmt.Errorf("parsing guest-exec-status response: %w", err)
+		}
+		if !statusResp.Return.Exited {
+			if attempt < statusAttempts {
+				sleepFunc(500 * time.Millisecond)
+			}
+			continue
+		}
+
+		stdout, _ := base64.StdEncoding.DecodeString(statusResp.Return.OutData)
+		stderr, _ := base64.StdEncoding.DecodeString(statusResp.Return.ErrData)
+		stdoutText := strings.TrimSpace(string(stdout))
+		stderrText := strings.TrimSpace(string(stderr))
+		switch {
+		case statusResp.Return.ExitCode != 0 && stdoutText != "" && stderrText != "":
+			return "", fmt.Errorf("guest-exec exited %d:\nstdout:\n%s\nstderr:\n%s", statusResp.Return.ExitCode, stdoutText, stderrText)
+		case statusResp.Return.ExitCode != 0 && stdoutText != "":
+			return "", fmt.Errorf("guest-exec exited %d:\nstdout:\n%s", statusResp.Return.ExitCode, stdoutText)
+		case statusResp.Return.ExitCode != 0 && stderrText != "":
+			return "", fmt.Errorf("guest-exec exited %d:\nstderr:\n%s", statusResp.Return.ExitCode, stderrText)
+		case statusResp.Return.ExitCode != 0:
+			return "", fmt.Errorf("guest-exec exited %d with no output", statusResp.Return.ExitCode)
+		case stdoutText != "" && stderrText != "":
+			return stdoutText + "\n" + stderrText, nil
+		case stdoutText != "":
+			return stdoutText, nil
+		case stderrText != "":
+			return stderrText, nil
+		default:
+			return "", nil
+		}
+	}
+
+	return "", fmt.Errorf("guest-exec status timed out")
 }
 
 func waitForGuestCloudInit(ip, identityFile string) error {

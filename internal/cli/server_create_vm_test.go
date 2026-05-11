@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"testing"
@@ -115,6 +116,46 @@ func TestWaitForGuestSSHDirectRetriesAuthErrors(t *testing.T) {
 	}
 	if calls != 2 {
 		t.Fatalf("waitForGuestSSHDirect calls = %d, want 2", calls)
+	}
+}
+
+func TestGuestAuthorizedKeysDiagnosticsIncludesGuestState(t *testing.T) {
+	originalVirsh := runVirshCommandFunc
+	originalSleep := sleepFunc
+	defer func() {
+		runVirshCommandFunc = originalVirsh
+		sleepFunc = originalSleep
+	}()
+
+	var calls int
+	stdout := "== id dev ==\nuid=1000(dev) gid=1000(dev) groups=1000(dev)\n"
+	runVirshCommandFunc = func(args ...string) (string, error) {
+		calls++
+		switch {
+		case len(args) >= 1 && args[0] == "get-user-sshkeys":
+			return "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexample test@example\n", nil
+		case len(args) >= 1 && args[0] == "qemu-agent-command" && calls == 2:
+			return `{"return":{"pid":7}}`, nil
+		case len(args) >= 1 && args[0] == "qemu-agent-command":
+			return `{"return":{"exited":true,"exitcode":0,"out-data":"` + base64.StdEncoding.EncodeToString([]byte(stdout)) + `","err-data":""}}`, nil
+		default:
+			return "", fmt.Errorf("unexpected virsh call: %v", args)
+		}
+	}
+	sleepFunc = func(time.Duration) {}
+
+	got := guestAuthorizedKeysDiagnostics("demo-vm", "dev", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexample test@example")
+	if !strings.Contains(got, "expected key present: true") {
+		t.Fatalf("guestAuthorizedKeysDiagnostics = %q, want key presence", got)
+	}
+	if !strings.Contains(got, "guest state:") {
+		t.Fatalf("guestAuthorizedKeysDiagnostics = %q, want guest state", got)
+	}
+	if !strings.Contains(got, "uid=1000(dev)") {
+		t.Fatalf("guestAuthorizedKeysDiagnostics = %q, want guest exec output", got)
+	}
+	if calls != 3 {
+		t.Fatalf("guestAuthorizedKeysDiagnostics calls = %d, want 3", calls)
 	}
 }
 
