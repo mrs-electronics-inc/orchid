@@ -60,11 +60,40 @@ func TestWaitForGuestCloudInitRetriesTransientSSHErrors(t *testing.T) {
 	}
 }
 
+func TestWaitForGuestAuthorizedKeyRetriesUntilKeyIsVisible(t *testing.T) {
+	originalVirsh := runVirshCommandFunc
+	originalSleep := sleepFunc
+	defer func() {
+		runVirshCommandFunc = originalVirsh
+		sleepFunc = originalSleep
+	}()
+
+	var calls int
+	expectedKey := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexample test@example"
+	runVirshCommandFunc = func(args ...string) (string, error) {
+		calls++
+		if calls == 1 {
+			return "", fmt.Errorf("guest agent not ready")
+		}
+		return expectedKey + "\n", nil
+	}
+	sleepFunc = func(time.Duration) {}
+
+	if err := waitForGuestAuthorizedKey("demo-vm", "dev", expectedKey, 3, time.Second); err != nil {
+		t.Fatalf("waitForGuestAuthorizedKey returned error: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("waitForGuestAuthorizedKey calls = %d, want 2", calls)
+	}
+}
+
 func TestWaitForGuestSSHDirectRetriesAuthErrors(t *testing.T) {
 	originalTry := tryGuestCommandDirectFunc
+	originalVirsh := runVirshCommandFunc
 	originalSleep := sleepFunc
 	defer func() {
 		tryGuestCommandDirectFunc = originalTry
+		runVirshCommandFunc = originalVirsh
 		sleepFunc = originalSleep
 	}()
 
@@ -76,9 +105,12 @@ func TestWaitForGuestSSHDirectRetriesAuthErrors(t *testing.T) {
 		}
 		return nil
 	}
+	runVirshCommandFunc = func(args ...string) (string, error) {
+		return "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexample test@example\n", nil
+	}
 	sleepFunc = func(time.Duration) {}
 
-	if err := waitForGuestSSHDirect("demo-vm", "192.168.122.43", "/tmp/id", "fingerprint", 3, time.Second); err != nil {
+	if err := waitForGuestSSHDirect("demo-vm", "192.168.122.43", "/tmp/id", "fingerprint", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexample test@example", 3, time.Second); err != nil {
 		t.Fatalf("waitForGuestSSHDirect returned error: %v", err)
 	}
 	if calls != 2 {

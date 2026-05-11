@@ -21,6 +21,7 @@ const (
 )
 
 var tryGuestCommandDirectFunc = tryGuestCommandDirect
+var runVirshCommandFunc = runVirshCommand
 var sleepFunc = time.Sleep
 
 func (s *daemonJobStore) startCreateVM(req daemonCreateVMRequest) (*daemonJob, error) {
@@ -169,7 +170,11 @@ func runCreateVMJob(job *daemonJob, req daemonCreateVMRequest) {
 	job.update(daemonJobStateRunning, daemonJobStageWaitingForIP, "VM has an IP address", vmName, ip)
 
 	job.update(daemonJobStateRunning, daemonJobStageWaitingForSSH, "waiting for SSH", vmName, ip)
-	if err := waitForGuestSSHDirect(vmName, ip, privateKeyPath, identityFingerprint, createVMRetryAttempts, createVMRetrySleep); err != nil {
+	if err := waitForGuestAuthorizedKey(vmName, "dev", strings.TrimSpace(req.PublicKey), createVMRetryAttempts, createVMRetrySleep); err != nil {
+		job.fail(daemonJobStageWaitingForSSH, "waiting for SSH", err.Error())
+		return
+	}
+	if err := waitForGuestSSHDirect(vmName, ip, privateKeyPath, identityFingerprint, strings.TrimSpace(req.PublicKey), createVMRetryAttempts, createVMRetrySleep); err != nil {
 		job.fail(daemonJobStageWaitingForSSH, "waiting for SSH", err.Error())
 		return
 	}
@@ -388,7 +393,7 @@ func waitForDaemonVMIP(vmName string, attempts int, sleep time.Duration) (string
 	return "", lastErr
 }
 
-func waitForGuestSSHDirect(vmName, ip, identityFile, identityFingerprint string, attempts int, sleep time.Duration) error {
+func waitForGuestSSHDirect(vmName, ip, identityFile, identityFingerprint, expectedPublicKey string, attempts int, sleep time.Duration) error {
 	var lastErr error
 	for attempt := 1; attempt <= attempts; attempt++ {
 		if err := tryGuestCommandDirectFunc(ip, identityFile, "true"); err == nil {
@@ -404,12 +409,72 @@ func waitForGuestSSHDirect(vmName, ip, identityFile, identityFingerprint string,
 		}
 	}
 	if lastErr != nil && isGuestSSHAuthError(lastErr) {
-		return fmt.Errorf("%w\nhint: the guest rejected the SSH key used for %s. fingerprint=%s\nhint: if the VM disk was reused, destroy the VM and recreate it; otherwise inspect cloud-init and the guest authorized_keys setup", lastErr, vmName, safeFingerprint(identityFingerprint))
+		diagnostics := guestAuthorizedKeysDiagnostics(vmName, "dev", expectedPublicKey)
+		if diagnostics != "" {
+			diagnostics = "\n\nguest authorized keys:\n" + diagnostics
+		}
+		return fmt.Errorf("%w\nhint: the guest rejected the SSH key used for %s. fingerprint=%s%s\nhint: if the VM disk was reused, destroy the VM and recreate it; otherwise inspect cloud-init and the guest authorized_keys setup", lastErr, vmName, safeFingerprint(identityFingerprint), diagnostics)
 	}
 	if lastErr == nil {
 		return fmt.Errorf("ssh to %s is not ready", ip)
 	}
 	return lastErr
+}
+
+func waitForGuestAuthorizedKey(vmName, user, expectedPublicKey string, attempts int, sleep time.Duration) error {
+	expectedPublicKey = strings.TrimSpace(expectedPublicKey)
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		output, err := runVirshCommandFunc("get-user-sshkeys", vmName, user)
+		if err == nil && strings.Contains(output, expectedPublicKey) {
+			return nil
+		}
+
+		if err != nil {
+			lastErr = fmt.Errorf("virsh get-user-sshkeys %s %s failed: %w", vmName, user, err)
+			fmt.Printf("  %s authorized keys not ready yet (%d/%d): %v\n", vmName, attempt, attempts, err)
+		} else {
+			lastErr = fmt.Errorf("guest authorized keys for %s do not yet include the expected key", vmName)
+			fmt.Printf("  %s authorized keys not ready yet (%d/%d)\n", vmName, attempt, attempts)
+		}
+
+		if attempt < attempts {
+			sleepFunc(sleep)
+		}
+	}
+	if lastErr == nil {
+		return fmt.Errorf("guest authorized keys for %s did not become available", vmName)
+	}
+
+	diagnostics := guestAuthorizedKeysDiagnostics(vmName, user, expectedPublicKey)
+	if diagnostics != "" {
+		return fmt.Errorf("%w\n\nguest authorized keys:\n%s", lastErr, diagnostics)
+	}
+	return lastErr
+}
+
+func guestAuthorizedKeysDiagnostics(vmName, user, expectedPublicKey string) string {
+	output, err := runVirshCommandFunc("get-user-sshkeys", vmName, user)
+	if err != nil {
+		return fmt.Sprintf("virsh get-user-sshkeys %s %s failed: %v", vmName, user, err)
+	}
+
+	var b strings.Builder
+	b.WriteString("virsh get-user-sshkeys ")
+	b.WriteString(vmName)
+	b.WriteString(" ")
+	b.WriteString(user)
+	b.WriteString(":\n")
+	if strings.TrimSpace(output) == "" {
+		b.WriteString("(empty)")
+	} else {
+		b.WriteString(strings.TrimSpace(output))
+	}
+	if expectedPublicKey != "" {
+		b.WriteString("\nexpected key present: ")
+		b.WriteString(fmt.Sprint(strings.Contains(output, expectedPublicKey)))
+	}
+	return b.String()
 }
 
 func waitForGuestCloudInit(ip, identityFile string) error {
