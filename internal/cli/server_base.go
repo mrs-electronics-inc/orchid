@@ -355,9 +355,12 @@ func collectBaseBuilderDiagnostics(ip, identityFile string) (string, error) {
 		b.WriteString(path)
 		b.WriteString(" ==\n")
 
-		output, err := runSSHKeyCommandOutput(ip, identityFile, "sh", "-lc", fmt.Sprintf("if [ -f %s ]; then tail -n 200 %s; else echo missing; fi", shellQuote(path), shellQuote(path)))
+		output, err := runSSHKeyCommandOutput(ip, identityFile, "tail", "-n", "200", path)
 		if err != nil {
-			return "", err
+			b.WriteString("(unavailable: ")
+			b.WriteString(err.Error())
+			b.WriteString(")")
+			continue
 		}
 
 		trimmed := strings.TrimSpace(output)
