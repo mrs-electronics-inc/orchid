@@ -40,3 +40,21 @@ func TestBuildOrchidBaseUserDataConfiguresUserWritableNpmPrefix(t *testing.T) {
 		t.Fatal("cloud-init user-data should not embed per-project Codex settings")
 	}
 }
+
+func TestOrchidBaseFinalizeScriptRemovesGuestSshState(t *testing.T) {
+	script := orchidBaseFinalizeScript()
+	wantSnippets := []string{
+		"sudo cloud-init clean --logs --seed",
+		"sudo install -d -m 0700 -o dev -g dev /home/dev/.ssh",
+		"sudo truncate -s 0 /home/dev/.ssh/authorized_keys",
+		"sudo chown dev:dev /home/dev/.ssh/authorized_keys",
+		"sudo chmod 0600 /home/dev/.ssh/authorized_keys",
+		"sudo rm -f /etc/ssh/ssh_host_*",
+		"sudo shutdown -h now",
+	}
+	for _, snippet := range wantSnippets {
+		if !strings.Contains(script, snippet) {
+			t.Fatalf("finalize script missing %q", snippet)
+		}
+	}
+}

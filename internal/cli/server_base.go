@@ -195,14 +195,7 @@ func buildOrchidBaseImage() error {
 	}
 
 	fmt.Println("Cleaning the image for cloning...")
-	if err := runSSHKeyShellCommand(ip, builderKeyPath, `
-sudo cloud-init clean --logs --seed &&
-sudo rm -f /etc/ssh/ssh_host_* &&
-sudo truncate -s 0 /etc/machine-id &&
-sudo rm -f /var/lib/dbus/machine-id &&
-sudo sync &&
-sudo shutdown -h now
-`); err != nil {
+	if err := runSSHKeyShellCommand(ip, builderKeyPath, orchidBaseFinalizeScript()); err != nil {
 		return fmt.Errorf("cleaning base image: %w", err)
 	}
 
@@ -315,6 +308,21 @@ func buildOrchidBaseUserData(publicKey string) string {
 	b.WriteString("runcmd:\n")
 	b.WriteString("  - /usr/local/bin/orchid-bootstrap.sh\n")
 	return b.String()
+}
+
+func orchidBaseFinalizeScript() string {
+	return `
+sudo cloud-init clean --logs --seed &&
+sudo install -d -m 0700 -o dev -g dev /home/dev/.ssh &&
+sudo truncate -s 0 /home/dev/.ssh/authorized_keys &&
+sudo chown dev:dev /home/dev/.ssh/authorized_keys &&
+sudo chmod 0600 /home/dev/.ssh/authorized_keys &&
+sudo rm -f /etc/ssh/ssh_host_* &&
+sudo truncate -s 0 /etc/machine-id &&
+sudo rm -f /var/lib/dbus/machine-id &&
+sudo sync &&
+sudo shutdown -h now
+`
 }
 
 func waitForSSHKey(ip, identityFile string, attempts int, sleep time.Duration) error {

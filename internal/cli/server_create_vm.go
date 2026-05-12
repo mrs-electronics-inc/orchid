@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -21,6 +23,7 @@ const (
 )
 
 var tryGuestCommandDirectFunc = tryGuestCommandDirect
+var runVirshCommandFunc = runVirshCommand
 var sleepFunc = time.Sleep
 
 func (s *daemonJobStore) startCreateVM(req daemonCreateVMRequest) (*daemonJob, error) {
@@ -169,7 +172,11 @@ func runCreateVMJob(job *daemonJob, req daemonCreateVMRequest) {
 	job.update(daemonJobStateRunning, daemonJobStageWaitingForIP, "VM has an IP address", vmName, ip)
 
 	job.update(daemonJobStateRunning, daemonJobStageWaitingForSSH, "waiting for SSH", vmName, ip)
-	if err := waitForGuestSSHDirect(vmName, ip, privateKeyPath, identityFingerprint, createVMRetryAttempts, createVMRetrySleep); err != nil {
+	if err := ensureGuestAuthorizedKey(vmName, "dev", strings.TrimSpace(req.PublicKey), createVMRetryAttempts, createVMRetrySleep); err != nil {
+		job.fail(daemonJobStageWaitingForSSH, "waiting for SSH", err.Error())
+		return
+	}
+	if err := waitForGuestSSHDirect(vmName, ip, privateKeyPath, identityFingerprint, strings.TrimSpace(req.PublicKey), createVMRetryAttempts, createVMRetrySleep); err != nil {
 		job.fail(daemonJobStageWaitingForSSH, "waiting for SSH", err.Error())
 		return
 	}
@@ -181,7 +188,7 @@ func runCreateVMJob(job *daemonJob, req daemonCreateVMRequest) {
 	}
 
 	job.update(daemonJobStateRunning, daemonJobStageWaitingForCloudInit, "verifying repo checkout", vmName, ip)
-	if err := waitForGuestRepoCheckout(ip, privateKeyPath, repoName, createVMVerifyAttempts, createVMVerifySleep); err != nil {
+	if err := waitForGuestRepoCheckout(vmName, ip, privateKeyPath, repoName, createVMVerifyAttempts, createVMVerifySleep); err != nil {
 		_ = destroyVM(vmName)
 		job.fail(daemonJobStageWaitingForCloudInit, "verifying repo checkout", err.Error())
 		return
@@ -338,7 +345,7 @@ func warmGuestRepoDevShell(ip, identityFile, repoName string) error {
 	return runSSHKeyShellCommand(ip, identityFile, fmt.Sprintf("cd %s && if [ -f flake.nix ]; then nix develop --command true; fi", shellQuote("/home/dev/"+repoName)))
 }
 
-func waitForGuestRepoCheckout(ip, identityFile, repoName string, attempts int, sleep time.Duration) error {
+func waitForGuestRepoCheckout(vmName, ip, identityFile, repoName string, attempts int, sleep time.Duration) error {
 	var lastErr error
 	for attempt := 1; attempt <= attempts; attempt++ {
 		if err := verifyGuestRepoCheckout(ip, identityFile, repoName); err == nil {
@@ -358,6 +365,9 @@ func waitForGuestRepoCheckout(ip, identityFile, repoName string, attempts int, s
 	}
 	if lastErr == nil {
 		return fmt.Errorf("repo checkout did not become ready")
+	}
+	if diagnostics := guestRepoCheckoutDiagnostics(vmName, repoName); diagnostics != "" {
+		return fmt.Errorf("%w\n\nguest repo diagnostics:\n%s", lastErr, diagnostics)
 	}
 	return lastErr
 }
@@ -388,7 +398,7 @@ func waitForDaemonVMIP(vmName string, attempts int, sleep time.Duration) (string
 	return "", lastErr
 }
 
-func waitForGuestSSHDirect(vmName, ip, identityFile, identityFingerprint string, attempts int, sleep time.Duration) error {
+func waitForGuestSSHDirect(vmName, ip, identityFile, identityFingerprint, expectedPublicKey string, attempts int, sleep time.Duration) error {
 	var lastErr error
 	for attempt := 1; attempt <= attempts; attempt++ {
 		if err := tryGuestCommandDirectFunc(ip, identityFile, "true"); err == nil {
@@ -404,12 +414,260 @@ func waitForGuestSSHDirect(vmName, ip, identityFile, identityFingerprint string,
 		}
 	}
 	if lastErr != nil && isGuestSSHAuthError(lastErr) {
-		return fmt.Errorf("%w\nhint: the guest rejected the SSH key used for %s. fingerprint=%s\nhint: if the VM disk was reused, destroy the VM and recreate it; otherwise inspect cloud-init and the guest authorized_keys setup", lastErr, vmName, safeFingerprint(identityFingerprint))
+		diagnostics := guestAuthorizedKeysDiagnostics(vmName, "dev", expectedPublicKey)
+		if diagnostics != "" {
+			diagnostics = "\n\nguest authorized keys:\n" + diagnostics
+		}
+		return fmt.Errorf("%w\nhint: the guest rejected the SSH key used for %s. fingerprint=%s%s\nhint: if the VM disk was reused, destroy the VM and recreate it; otherwise inspect cloud-init and the guest authorized_keys setup", lastErr, vmName, safeFingerprint(identityFingerprint), diagnostics)
 	}
 	if lastErr == nil {
 		return fmt.Errorf("ssh to %s is not ready", ip)
 	}
 	return lastErr
+}
+
+func waitForGuestAuthorizedKey(vmName, user, expectedPublicKey string, attempts int, sleep time.Duration) error {
+	expectedPublicKey = strings.TrimSpace(expectedPublicKey)
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		output, err := runVirshCommandFunc("get-user-sshkeys", vmName, user)
+		if err == nil && strings.Contains(output, expectedPublicKey) {
+			return nil
+		}
+
+		if err != nil {
+			lastErr = fmt.Errorf("virsh get-user-sshkeys %s %s failed: %w", vmName, user, err)
+			fmt.Printf("  %s authorized keys not ready yet (%d/%d): %v\n", vmName, attempt, attempts, err)
+		} else {
+			lastErr = fmt.Errorf("guest authorized keys for %s do not yet include the expected key", vmName)
+			fmt.Printf("  %s authorized keys not ready yet (%d/%d)\n", vmName, attempt, attempts)
+		}
+
+		if attempt < attempts {
+			sleepFunc(sleep)
+		}
+	}
+	if lastErr == nil {
+		return fmt.Errorf("guest authorized keys for %s did not become available", vmName)
+	}
+
+	diagnostics := guestAuthorizedKeysDiagnostics(vmName, user, expectedPublicKey)
+	if diagnostics != "" {
+		return fmt.Errorf("%w\n\nguest authorized keys:\n%s", lastErr, diagnostics)
+	}
+	return lastErr
+}
+
+func ensureGuestAuthorizedKey(vmName, user, publicKey string, attempts int, sleep time.Duration) error {
+	script := guestAuthorizedKeysInstallScript(user, publicKey)
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		// Write the key through the guest agent so the VM does not depend on
+		// cloud-init timing for first-boot SSH access.
+		if _, err := runGuestAgentShellCommand(vmName, script); err == nil {
+			return waitForGuestAuthorizedKey(vmName, user, publicKey, 3, sleep)
+		} else {
+			lastErr = err
+			fmt.Printf("  %s authorized key install not ready yet (%d/%d): %v\n", vmName, attempt, attempts, err)
+		}
+		if attempt < attempts {
+			sleepFunc(sleep)
+		}
+	}
+	if lastErr == nil {
+		return fmt.Errorf("guest authorized key for %s could not be installed", vmName)
+	}
+	return fmt.Errorf("guest authorized key for %s could not be installed: %w", vmName, lastErr)
+}
+
+func guestAuthorizedKeysInstallScript(user, publicKey string) string {
+	return strings.TrimSpace(`
+set -eu
+install -d -m 0700 -o ` + user + ` -g ` + user + ` /home/` + user + `/.ssh
+printf '%s\n' ` + shellQuote(publicKey) + ` > /home/` + user + `/.ssh/authorized_keys
+chown ` + user + `:` + user + ` /home/` + user + `/.ssh/authorized_keys
+chmod 0600 /home/` + user + `/.ssh/authorized_keys
+`)
+}
+
+func guestAuthorizedKeysDiagnostics(vmName, user, expectedPublicKey string) string {
+	output, err := runVirshCommandFunc("get-user-sshkeys", vmName, user)
+	if err != nil {
+		return fmt.Sprintf("virsh get-user-sshkeys %s %s failed: %v", vmName, user, err)
+	}
+
+	var b strings.Builder
+	b.WriteString("virsh get-user-sshkeys ")
+	b.WriteString(vmName)
+	b.WriteString(" ")
+	b.WriteString(user)
+	b.WriteString(":\n")
+	if strings.TrimSpace(output) == "" {
+		b.WriteString("(empty)")
+	} else {
+		b.WriteString(strings.TrimSpace(output))
+	}
+	if expectedPublicKey != "" {
+		b.WriteString("\nexpected key present: ")
+		b.WriteString(fmt.Sprint(strings.Contains(output, expectedPublicKey)))
+	}
+
+	guestState, err := guestAgentStateDiagnostics(vmName)
+	if err != nil {
+		b.WriteString("\nguest agent diagnostics failed: ")
+		b.WriteString(err.Error())
+	} else if strings.TrimSpace(guestState) != "" {
+		b.WriteString("\n\nguest state:\n")
+		b.WriteString(guestState)
+	}
+	return b.String()
+}
+
+func guestRepoCheckoutDiagnostics(vmName, repoName string) string {
+	// When the repo never appears, dump guest-side logs so the daemon log shows
+	// the clone failure instead of only a missing-directory summary.
+	script := strings.TrimSpace(`
+set -eu
+echo "== repo layout =="
+ls -ld /home/dev /home/dev/.ssh 2>/dev/null || true
+ls -ld ` + shellQuote("/home/dev/"+repoName) + ` 2>/dev/null || true
+echo "== cloud-init output =="
+tail -n 120 /var/log/cloud-init-output.log 2>/dev/null || true
+echo "== cloud-init log =="
+tail -n 120 /var/log/cloud-init.log 2>/dev/null || true
+`)
+
+	out, err := runGuestAgentShellCommand(vmName, script)
+	if err != nil {
+		return fmt.Sprintf("guest repo diagnostics failed: %v", err)
+	}
+	return out
+}
+
+type guestAgentExecResponse struct {
+	Return struct {
+		Pid int `json:"pid"`
+	} `json:"return"`
+}
+
+type guestAgentExecStatusResponse struct {
+	Return struct {
+		Exited   bool   `json:"exited"`
+		ExitCode int    `json:"exitcode"`
+		OutData  string `json:"out-data"`
+		ErrData  string `json:"err-data"`
+	} `json:"return"`
+}
+
+func guestAgentStateDiagnostics(vmName string) (string, error) {
+	script := strings.TrimSpace(`
+set -eu
+echo "== id dev =="
+id dev || true
+echo "== passwd =="
+getent passwd dev || true
+echo "== home =="
+stat -c '%U:%G %a %n' /home/dev /home/dev/.ssh /home/dev/.ssh/authorized_keys 2>/dev/null || true
+echo "== authorized_keys =="
+sed -n '1,20p' /home/dev/.ssh/authorized_keys 2>/dev/null || true
+echo "== sshd config =="
+grep -nE '^(AuthorizedKeysFile|PubkeyAuthentication|PasswordAuthentication|PermitRootLogin)' /etc/ssh/sshd_config 2>/dev/null || true
+echo "== sshd status =="
+systemctl is-active sshd 2>/dev/null || true
+echo "== auth log =="
+tail -n 80 /var/log/auth.log 2>/dev/null || true
+echo "== cloud-init log =="
+tail -n 80 /var/log/cloud-init.log 2>/dev/null || true
+`)
+
+	out, err := runGuestAgentShellCommand(vmName, script)
+	if err != nil {
+		return "", err
+	}
+	return out, nil
+}
+
+func runGuestAgentShellCommand(vmName, script string) (string, error) {
+	request := map[string]any{
+		"execute": "guest-exec",
+		"arguments": map[string]any{
+			"path":           "/bin/sh",
+			"arg":            []string{"-lc", script},
+			"capture-output": true,
+		},
+	}
+	requestJSON, err := json.Marshal(request)
+	if err != nil {
+		return "", fmt.Errorf("encoding guest-exec request: %w", err)
+	}
+
+	output, err := runVirshCommandFunc("qemu-agent-command", vmName, string(requestJSON))
+	if err != nil {
+		return "", err
+	}
+
+	var execResp guestAgentExecResponse
+	if err := json.Unmarshal([]byte(output), &execResp); err != nil {
+		return "", fmt.Errorf("parsing guest-exec response: %w", err)
+	}
+	if execResp.Return.Pid == 0 {
+		return "", fmt.Errorf("guest-exec response missing pid")
+	}
+
+	const statusAttempts = 20
+	for attempt := 1; attempt <= statusAttempts; attempt++ {
+		statusReq := map[string]any{
+			"execute": "guest-exec-status",
+			"arguments": map[string]any{
+				"pid": execResp.Return.Pid,
+			},
+		}
+		statusJSON, err := json.Marshal(statusReq)
+		if err != nil {
+			return "", fmt.Errorf("encoding guest-exec-status request: %w", err)
+		}
+
+		statusOutput, err := runVirshCommandFunc("qemu-agent-command", vmName, string(statusJSON))
+		if err != nil {
+			return "", err
+		}
+
+		var statusResp guestAgentExecStatusResponse
+		if err := json.Unmarshal([]byte(statusOutput), &statusResp); err != nil {
+			return "", fmt.Errorf("parsing guest-exec-status response: %w", err)
+		}
+		if !statusResp.Return.Exited {
+			if attempt < statusAttempts {
+				sleepFunc(500 * time.Millisecond)
+			}
+			continue
+		}
+
+		stdout, _ := base64.StdEncoding.DecodeString(statusResp.Return.OutData)
+		stderr, _ := base64.StdEncoding.DecodeString(statusResp.Return.ErrData)
+		stdoutText := strings.TrimSpace(string(stdout))
+		stderrText := strings.TrimSpace(string(stderr))
+		switch {
+		case statusResp.Return.ExitCode != 0 && stdoutText != "" && stderrText != "":
+			return "", fmt.Errorf("guest-exec exited %d:\nstdout:\n%s\nstderr:\n%s", statusResp.Return.ExitCode, stdoutText, stderrText)
+		case statusResp.Return.ExitCode != 0 && stdoutText != "":
+			return "", fmt.Errorf("guest-exec exited %d:\nstdout:\n%s", statusResp.Return.ExitCode, stdoutText)
+		case statusResp.Return.ExitCode != 0 && stderrText != "":
+			return "", fmt.Errorf("guest-exec exited %d:\nstderr:\n%s", statusResp.Return.ExitCode, stderrText)
+		case statusResp.Return.ExitCode != 0:
+			return "", fmt.Errorf("guest-exec exited %d with no output", statusResp.Return.ExitCode)
+		case stdoutText != "" && stderrText != "":
+			return stdoutText + "\n" + stderrText, nil
+		case stdoutText != "":
+			return stdoutText, nil
+		case stderrText != "":
+			return stderrText, nil
+		default:
+			return "", nil
+		}
+	}
+
+	return "", fmt.Errorf("guest-exec status timed out")
 }
 
 func waitForGuestCloudInit(ip, identityFile string) error {
