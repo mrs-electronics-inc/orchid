@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -56,7 +57,7 @@ func buildCreateVMUserData(vmName, repoName, repoHost, repoURL, publicKey, priva
 	b.WriteString("\n")
 	if settings.Timezone != "" {
 		b.WriteString("timezone: ")
-		b.WriteString(settings.Timezone)
+		b.WriteString(strconv.Quote(settings.Timezone))
 		b.WriteString("\n")
 	}
 	b.WriteString("ssh_pwauth: false\n")

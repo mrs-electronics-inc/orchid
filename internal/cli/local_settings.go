@@ -25,7 +25,7 @@ func readLocalGitIdentity() (string, string) {
 }
 
 func readGitConfigValue(key string) string {
-	value, err := runQuietLocalCommand("git", "config", "--get", key)
+	value, err := runQuietLocalCommand("git", "config", "--global", "--get", key)
 	if err != nil {
 		return ""
 	}
