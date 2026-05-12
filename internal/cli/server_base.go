@@ -313,7 +313,10 @@ func buildOrchidBaseUserData(publicKey string) string {
 func orchidBaseFinalizeScript() string {
 	return `
 sudo cloud-init clean --logs --seed &&
-sudo rm -rf /home/dev/.ssh &&
+sudo install -d -m 0700 -o dev -g dev /home/dev/.ssh &&
+sudo truncate -s 0 /home/dev/.ssh/authorized_keys &&
+sudo chown dev:dev /home/dev/.ssh/authorized_keys &&
+sudo chmod 0600 /home/dev/.ssh/authorized_keys &&
 sudo rm -f /etc/ssh/ssh_host_* &&
 sudo truncate -s 0 /etc/machine-id &&
 sudo rm -f /var/lib/dbus/machine-id &&
