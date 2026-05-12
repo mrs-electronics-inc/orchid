@@ -15,6 +15,8 @@ import (
 var (
 	submitDaemonCreateVMFunc = submitDaemonCreateVM
 	waitForDaemonJobFunc     = waitForDaemonJob
+	readLocalTimezoneFunc    = readLocalTimezone
+	readLocalGitIdentityFunc = readLocalGitIdentity
 )
 
 func vmConnect(user, hypervisorFlag, identityFileFlag, vmName string, remoteArgs []string) int {
@@ -71,11 +73,17 @@ func vmCreate(nameFlag, hypervisorFlag, identityFileFlag, repoURL string) int {
 		return 1
 	}
 
+	timezone := readLocalTimezoneFunc()
+	gitUserName, gitUserEmail := readLocalGitIdentityFunc()
+
 	req := daemonCreateVMRequest{
-		Name:       vmName,
-		RepoURL:    repoURL,
-		PublicKey:  publicKey,
-		PrivateKey: string(privateKey),
+		Name:         vmName,
+		RepoURL:      repoURL,
+		PublicKey:    publicKey,
+		PrivateKey:   string(privateKey),
+		Timezone:     timezone,
+		GitUserName:  gitUserName,
+		GitUserEmail: gitUserEmail,
 	}
 
 	fmt.Printf("Creating VM '%s' for %s...\n", vmName, repoURL)

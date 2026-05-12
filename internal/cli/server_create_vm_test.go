@@ -45,6 +45,54 @@ func TestBuildCreateVMUserDataExplainsGitCloneAuthFailures(t *testing.T) {
 	}
 }
 
+func TestBuildCreateVMUserDataIncludesTimezoneAndGitIdentity(t *testing.T) {
+	userData := buildCreateVMUserData(
+		"example-vm",
+		"example-repo",
+		"example.com",
+		"git@example.com:org/example-repo.git",
+		"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexample test@example",
+		"-----BEGIN OPENSSH PRIVATE KEY-----\nexample\n-----END OPENSSH PRIVATE KEY-----",
+		createVMUserDataExtras{
+			Timezone:     "America/New_York",
+			GitUserName:  "Test User",
+			GitUserEmail: "test@example.com",
+		},
+	)
+
+	wantSnippets := []string{
+		"timezone: \"America/New_York\"",
+		"/home/dev/.gitconfig",
+		"[user]",
+		"name = Test User",
+		"email = test@example.com",
+	}
+
+	for _, snippet := range wantSnippets {
+		if !strings.Contains(userData, snippet) {
+			t.Fatalf("cloud-init user-data missing %q", snippet)
+		}
+	}
+}
+
+func TestBuildCreateVMUserDataQuotesTimezone(t *testing.T) {
+	userData := buildCreateVMUserData(
+		"example-vm",
+		"example-repo",
+		"example.com",
+		"git@example.com:org/example-repo.git",
+		"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexample test@example",
+		"-----BEGIN OPENSSH PRIVATE KEY-----\nexample\n-----END OPENSSH PRIVATE KEY-----",
+		createVMUserDataExtras{
+			Timezone: ":America/New_York",
+		},
+	)
+
+	if !strings.Contains(userData, "timezone: \":America/New_York\"") {
+		t.Fatalf("cloud-init user-data missing quoted timezone: %q", userData)
+	}
+}
+
 func TestWaitForGuestCloudInitRetriesTransientSSHErrors(t *testing.T) {
 	originalTry := tryGuestCommandDirectFunc
 	originalSleep := sleepFunc

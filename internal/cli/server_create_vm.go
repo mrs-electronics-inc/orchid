@@ -82,7 +82,11 @@ func runCreateVMJob(job *daemonJob, req daemonCreateVMRequest) {
 	metaDataPath := filepath.Join(tmpDir, "meta-data")
 	networkConfigPath := filepath.Join(tmpDir, "network-config")
 
-	if err := os.WriteFile(userDataPath, []byte(buildCreateVMUserData(vmName, repoName, repoHost, cloneURL, strings.TrimSpace(req.PublicKey), req.PrivateKey)), 0o600); err != nil {
+	if err := os.WriteFile(userDataPath, []byte(buildCreateVMUserData(vmName, repoName, repoHost, cloneURL, strings.TrimSpace(req.PublicKey), req.PrivateKey, createVMUserDataExtras{
+		Timezone:     req.Timezone,
+		GitUserName:  req.GitUserName,
+		GitUserEmail: req.GitUserEmail,
+	})), 0o600); err != nil {
 		job.fail(daemonJobStageValidatingRequest, "writing user-data", err.Error())
 		return
 	}
