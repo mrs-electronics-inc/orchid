@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 )
 
@@ -90,6 +91,24 @@ func (j *daemonJob) fail(stage, message, errText string) {
 	if message != "" {
 		j.status.Message = message
 	}
-	j.status.Error = errText
-	log.Printf("job %s failed state=%s stage=%s vm=%s ip=%s message=%q error=%q", j.status.JobID, j.status.State, j.status.Stage, j.status.VMName, j.status.IP, j.status.Message, j.status.Error)
+	j.status.Error = summarizeJobError(errText)
+	log.Printf("job %s failed state=%s stage=%s vm=%s ip=%s message=%q error=%q details=%q", j.status.JobID, j.status.State, j.status.Stage, j.status.VMName, j.status.IP, j.status.Message, j.status.Error, errText)
+}
+
+func summarizeJobError(errText string) string {
+	trimmed := strings.TrimSpace(errText)
+	if trimmed == "" {
+		return ""
+	}
+
+	if idx := strings.Index(trimmed, "\n"); idx >= 0 {
+		trimmed = trimmed[:idx]
+	}
+
+	const maxLen = 240
+	if len(trimmed) > maxLen {
+		return trimmed[:maxLen-3] + "..."
+	}
+
+	return trimmed
 }

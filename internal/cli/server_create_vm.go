@@ -462,6 +462,8 @@ func ensureGuestAuthorizedKey(vmName, user, publicKey string, attempts int, slee
 	script := guestAuthorizedKeysInstallScript(user, publicKey)
 	var lastErr error
 	for attempt := 1; attempt <= attempts; attempt++ {
+		// Write the key through the guest agent so the VM does not depend on
+		// cloud-init timing for first-boot SSH access.
 		if _, err := runGuestAgentShellCommand(vmName, script); err == nil {
 			return waitForGuestAuthorizedKey(vmName, user, publicKey, 3, sleep)
 		} else {
@@ -522,6 +524,8 @@ func guestAuthorizedKeysDiagnostics(vmName, user, expectedPublicKey string) stri
 }
 
 func guestRepoCheckoutDiagnostics(vmName, repoName string) string {
+	// When the repo never appears, dump guest-side logs so the daemon log shows
+	// the clone failure instead of only a missing-directory summary.
 	script := strings.TrimSpace(`
 set -eu
 echo "== repo layout =="

@@ -23,6 +23,7 @@ func TestBuildCreateVMUserDataExplainsGitCloneAuthFailures(t *testing.T) {
 		"if this is a private repository, make sure the SSH private key configured with `orchid config set identity-file <path>` can access the repo, then add its public key to your account SSH keys and retry.",
 		"write_files:\n",
 		"runcmd:\n",
+		"/usr/local/bin/orchid-vm-setup.sh",
 	}
 
 	for _, snippet := range wantSnippets {
@@ -38,6 +39,9 @@ func TestBuildCreateVMUserDataExplainsGitCloneAuthFailures(t *testing.T) {
 	}
 	if strings.Contains(userData, "/home/dev/.ssh/authorized_keys") {
 		t.Fatal("cloud-init user-data should not write the guest authorized_keys file")
+	}
+	if strings.Contains(userData, "  - su - dev -c \"git clone ") {
+		t.Fatal("cloud-init user-data should not inline the git clone command in runcmd")
 	}
 }
 
