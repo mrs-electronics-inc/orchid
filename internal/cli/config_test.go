@@ -127,12 +127,23 @@ func TestVMCreateDoesNotWriteConfig(t *testing.T) {
 
 	originalSubmit := submitDaemonCreateVMFunc
 	originalWait := waitForDaemonJobFunc
+	originalTimezone := readLocalTimezoneFunc
+	originalGitIdentity := readLocalGitIdentityFunc
 	submitDaemonCreateVMFunc = func(hypervisor string, req daemonCreateVMRequest) (daemonCreateVMResponse, error) {
 		if hypervisor != "hypervisor.example" {
 			t.Fatalf("hypervisor = %q, want %q", hypervisor, "hypervisor.example")
 		}
 		if req.Name != "demo-vm" {
 			t.Fatalf("vm name = %q, want %q", req.Name, "demo-vm")
+		}
+		if req.Timezone != "America/New_York" {
+			t.Fatalf("timezone = %q, want %q", req.Timezone, "America/New_York")
+		}
+		if req.GitUserName != "Test User" {
+			t.Fatalf("git user name = %q, want %q", req.GitUserName, "Test User")
+		}
+		if req.GitUserEmail != "test@example.com" {
+			t.Fatalf("git user email = %q, want %q", req.GitUserEmail, "test@example.com")
 		}
 		return daemonCreateVMResponse{JobID: "job-123"}, nil
 	}
@@ -145,9 +156,17 @@ func TestVMCreateDoesNotWriteConfig(t *testing.T) {
 		}
 		return daemonJobStatus{State: daemonJobStateSucceeded, VMName: "demo-vm"}, nil
 	}
+	readLocalTimezoneFunc = func() string {
+		return "America/New_York"
+	}
+	readLocalGitIdentityFunc = func() (string, string) {
+		return "Test User", "test@example.com"
+	}
 	defer func() {
 		submitDaemonCreateVMFunc = originalSubmit
 		waitForDaemonJobFunc = originalWait
+		readLocalTimezoneFunc = originalTimezone
+		readLocalGitIdentityFunc = originalGitIdentity
 	}()
 
 	if code := vmCreate("demo-vm", "hypervisor.example", identityFile, "https://github.com/org/repo.git"); code != 0 {

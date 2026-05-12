@@ -78,6 +78,8 @@ orchid vm create --name <vm-name> <repo-url>
 
 The CLI prints job stage transitions while the daemon creates the disk, writes cloud-init seed data, starts the VM, waits for IP/SSH/cloud-init, verifies the repo checkout, warms the flake dev shell with `nix develop` on the hypervisor, and then prints `orchid vm connect <vm-name>`. `orchid vm connect` forces `TERM=xterm-256color` so the guest uses a standard terminal type.
 
+When available, `orchid vm create` also copies your local timezone plus Git `user.name` and `user.email` into the new guest so the VM starts with the same defaults you use on your laptop.
+
 On first boot, cloud-init performs only VM-specific setup: setting the hostname, cloning the target repo, installing the authorized key, and dropping a repo-local `.envrc` so `direnv` loads the flake when the checkout has a `flake.nix`.
 
 Use `orchid vm destroy <vm-name>` to remove the VM and its disk artifacts.

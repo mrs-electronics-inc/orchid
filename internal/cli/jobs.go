@@ -18,10 +18,13 @@ const (
 )
 
 type daemonCreateVMRequest struct {
-	Name       string `json:"name,omitempty"`
-	RepoURL    string `json:"repo_url"`
-	PublicKey  string `json:"public_key"`
-	PrivateKey string `json:"private_key"`
+	Name         string `json:"name,omitempty"`
+	RepoURL      string `json:"repo_url"`
+	PublicKey    string `json:"public_key"`
+	PrivateKey   string `json:"private_key"`
+	Timezone     string `json:"timezone,omitempty"`
+	GitUserName  string `json:"git_user_name,omitempty"`
+	GitUserEmail string `json:"git_user_email,omitempty"`
 }
 
 type daemonCreateVMResponse struct {

@@ -6,6 +6,12 @@ import (
 	"time"
 )
 
+type createVMUserDataExtras struct {
+	Timezone     string
+	GitUserName  string
+	GitUserEmail string
+}
+
 func waitForDaemonJob(hypervisor, jobID string) (daemonJobStatus, error) {
 	var last daemonJobStatus
 	for {
@@ -37,12 +43,22 @@ func waitForDaemonJob(hypervisor, jobID string) (daemonJobStatus, error) {
 	}
 }
 
-func buildCreateVMUserData(vmName, repoName, repoHost, repoURL, publicKey, privateKey string) string {
+func buildCreateVMUserData(vmName, repoName, repoHost, repoURL, publicKey, privateKey string, extras ...createVMUserDataExtras) string {
+	var settings createVMUserDataExtras
+	if len(extras) > 0 {
+		settings = extras[0]
+	}
+
 	var b strings.Builder
 	b.WriteString("#cloud-config\n")
 	b.WriteString("hostname: ")
 	b.WriteString(vmName)
 	b.WriteString("\n")
+	if settings.Timezone != "" {
+		b.WriteString("timezone: ")
+		b.WriteString(settings.Timezone)
+		b.WriteString("\n")
+	}
 	b.WriteString("ssh_pwauth: false\n")
 	b.WriteString("users:\n")
 	b.WriteString("  - name: dev\n")
@@ -78,6 +94,23 @@ func buildCreateVMUserData(vmName, repoName, repoHost, repoURL, publicKey, priva
 	b.WriteString("      cd ")
 	b.WriteString(shellQuote("/home/dev/" + repoName))
 	b.WriteString("\n")
+	if settings.GitUserName != "" || settings.GitUserEmail != "" {
+		b.WriteString("  - path: /home/dev/.gitconfig\n")
+		b.WriteString("    permissions: '0644'\n")
+		b.WriteString("    owner: dev:dev\n")
+		b.WriteString("    content: |\n")
+		b.WriteString("      [user]\n")
+		if settings.GitUserName != "" {
+			b.WriteString("        name = ")
+			b.WriteString(settings.GitUserName)
+			b.WriteString("\n")
+		}
+		if settings.GitUserEmail != "" {
+			b.WriteString("        email = ")
+			b.WriteString(settings.GitUserEmail)
+			b.WriteString("\n")
+		}
+	}
 	b.WriteString("  - path: /home/dev/.orchid-envrc\n")
 	b.WriteString("    permissions: '0644'\n")
 	b.WriteString("    owner: dev:dev\n")
