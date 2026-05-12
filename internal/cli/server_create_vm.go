@@ -172,7 +172,7 @@ func runCreateVMJob(job *daemonJob, req daemonCreateVMRequest) {
 	job.update(daemonJobStateRunning, daemonJobStageWaitingForIP, "VM has an IP address", vmName, ip)
 
 	job.update(daemonJobStateRunning, daemonJobStageWaitingForSSH, "waiting for SSH", vmName, ip)
-	if err := waitForGuestAuthorizedKey(vmName, "dev", strings.TrimSpace(req.PublicKey), createVMRetryAttempts, createVMRetrySleep); err != nil {
+	if err := ensureGuestAuthorizedKey(vmName, "dev", strings.TrimSpace(req.PublicKey), createVMRetryAttempts, createVMRetrySleep); err != nil {
 		job.fail(daemonJobStageWaitingForSSH, "waiting for SSH", err.Error())
 		return
 	}
@@ -453,6 +453,36 @@ func waitForGuestAuthorizedKey(vmName, user, expectedPublicKey string, attempts 
 		return fmt.Errorf("%w\n\nguest authorized keys:\n%s", lastErr, diagnostics)
 	}
 	return lastErr
+}
+
+func ensureGuestAuthorizedKey(vmName, user, publicKey string, attempts int, sleep time.Duration) error {
+	script := guestAuthorizedKeysInstallScript(user, publicKey)
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		if _, err := runGuestAgentShellCommand(vmName, script); err == nil {
+			return waitForGuestAuthorizedKey(vmName, user, publicKey, 3, sleep)
+		} else {
+			lastErr = err
+			fmt.Printf("  %s authorized key install not ready yet (%d/%d): %v\n", vmName, attempt, attempts, err)
+		}
+		if attempt < attempts {
+			sleepFunc(sleep)
+		}
+	}
+	if lastErr == nil {
+		return fmt.Errorf("guest authorized key for %s could not be installed", vmName)
+	}
+	return fmt.Errorf("guest authorized key for %s could not be installed: %w", vmName, lastErr)
+}
+
+func guestAuthorizedKeysInstallScript(user, publicKey string) string {
+	return strings.TrimSpace(`
+set -eu
+install -d -m 0700 -o ` + user + ` -g ` + user + ` /home/` + user + `/.ssh
+printf '%s\n' ` + shellQuote(publicKey) + ` > /home/` + user + `/.ssh/authorized_keys
+chown ` + user + `:` + user + ` /home/` + user + `/.ssh/authorized_keys
+chmod 0600 /home/` + user + `/.ssh/authorized_keys
+`)
 }
 
 func guestAuthorizedKeysDiagnostics(vmName, user, expectedPublicKey string) string {
