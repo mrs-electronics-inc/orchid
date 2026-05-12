@@ -188,7 +188,7 @@ func runCreateVMJob(job *daemonJob, req daemonCreateVMRequest) {
 	}
 
 	job.update(daemonJobStateRunning, daemonJobStageWaitingForCloudInit, "verifying repo checkout", vmName, ip)
-	if err := waitForGuestRepoCheckout(ip, privateKeyPath, repoName, createVMVerifyAttempts, createVMVerifySleep); err != nil {
+	if err := waitForGuestRepoCheckout(vmName, ip, privateKeyPath, repoName, createVMVerifyAttempts, createVMVerifySleep); err != nil {
 		_ = destroyVM(vmName)
 		job.fail(daemonJobStageWaitingForCloudInit, "verifying repo checkout", err.Error())
 		return
@@ -345,7 +345,7 @@ func warmGuestRepoDevShell(ip, identityFile, repoName string) error {
 	return runSSHKeyShellCommand(ip, identityFile, fmt.Sprintf("cd %s && if [ -f flake.nix ]; then nix develop --command true; fi", shellQuote("/home/dev/"+repoName)))
 }
 
-func waitForGuestRepoCheckout(ip, identityFile, repoName string, attempts int, sleep time.Duration) error {
+func waitForGuestRepoCheckout(vmName, ip, identityFile, repoName string, attempts int, sleep time.Duration) error {
 	var lastErr error
 	for attempt := 1; attempt <= attempts; attempt++ {
 		if err := verifyGuestRepoCheckout(ip, identityFile, repoName); err == nil {
@@ -365,6 +365,9 @@ func waitForGuestRepoCheckout(ip, identityFile, repoName string, attempts int, s
 	}
 	if lastErr == nil {
 		return fmt.Errorf("repo checkout did not become ready")
+	}
+	if diagnostics := guestRepoCheckoutDiagnostics(vmName, repoName); diagnostics != "" {
+		return fmt.Errorf("%w\n\nguest repo diagnostics:\n%s", lastErr, diagnostics)
 	}
 	return lastErr
 }
@@ -516,6 +519,25 @@ func guestAuthorizedKeysDiagnostics(vmName, user, expectedPublicKey string) stri
 		b.WriteString(guestState)
 	}
 	return b.String()
+}
+
+func guestRepoCheckoutDiagnostics(vmName, repoName string) string {
+	script := strings.TrimSpace(`
+set -eu
+echo "== repo layout =="
+ls -ld /home/dev /home/dev/.ssh 2>/dev/null || true
+ls -ld ` + shellQuote("/home/dev/"+repoName) + ` 2>/dev/null || true
+echo "== cloud-init output =="
+tail -n 120 /var/log/cloud-init-output.log 2>/dev/null || true
+echo "== cloud-init log =="
+tail -n 120 /var/log/cloud-init.log 2>/dev/null || true
+`)
+
+	out, err := runGuestAgentShellCommand(vmName, script)
+	if err != nil {
+		return fmt.Sprintf("guest repo diagnostics failed: %v", err)
+	}
+	return out
 }
 
 type guestAgentExecResponse struct {

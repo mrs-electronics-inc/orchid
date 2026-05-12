@@ -206,6 +206,41 @@ func TestGuestAuthorizedKeysDiagnosticsIncludesGuestState(t *testing.T) {
 	}
 }
 
+func TestGuestRepoCheckoutDiagnosticsIncludesCloudInitOutput(t *testing.T) {
+	originalVirsh := runVirshCommandFunc
+	originalSleep := sleepFunc
+	defer func() {
+		runVirshCommandFunc = originalVirsh
+		sleepFunc = originalSleep
+	}()
+
+	var calls int
+	output := "== cloud-init output ==\norchid: git clone failed.\nfatal: could not read from remote repository.\n"
+	runVirshCommandFunc = func(args ...string) (string, error) {
+		calls++
+		switch {
+		case len(args) >= 1 && args[0] == "qemu-agent-command" && strings.Contains(args[2], `"execute":"guest-exec"`):
+			return `{"return":{"pid":7}}`, nil
+		case len(args) >= 1 && args[0] == "qemu-agent-command" && strings.Contains(args[2], `"execute":"guest-exec-status"`):
+			return `{"return":{"exited":true,"exitcode":0,"out-data":"` + base64.StdEncoding.EncodeToString([]byte(output)) + `","err-data":""}}`, nil
+		default:
+			return "", fmt.Errorf("unexpected virsh call: %v", args)
+		}
+	}
+	sleepFunc = func(time.Duration) {}
+
+	got := guestRepoCheckoutDiagnostics("demo-vm", "demo-repo")
+	if !strings.Contains(got, "cloud-init output") {
+		t.Fatalf("guestRepoCheckoutDiagnostics = %q, want cloud-init output", got)
+	}
+	if !strings.Contains(got, "git clone failed") {
+		t.Fatalf("guestRepoCheckoutDiagnostics = %q, want clone failure", got)
+	}
+	if calls != 2 {
+		t.Fatalf("guestRepoCheckoutDiagnostics calls = %d, want 2", calls)
+	}
+}
+
 func TestWaitForGuestCloudInitFailsFastOnNonTransientErrors(t *testing.T) {
 	originalTry := tryGuestCommandDirectFunc
 	originalSleep := sleepFunc
